@@ -123,10 +123,12 @@ public:
     void setProcessDirectionVisible(bool visible);
     void setProcessOrderVisible(bool visible);
     void setRotaryEndCutsVisible(bool visible);
-    void setRotaryEndCutLaserEndpointPreview
+    void setRotaryLaserWallImpactVisible(bool visible);
+    void setRotaryExpectedSurfaceVisible(bool visible);
+    void setRotaryEndCutPreview
     (
         const std::optional<cadcam::machining::TubeSectionModel>& section,
-        double machiningDepth,
+        double wallThickness,
         const cadcam::machine::RotaryMachinePolicy& machinePolicy
     );
     void setExcludedEntitiesDimmed(bool dimmed);
@@ -293,6 +295,7 @@ public:
     void refreshCommandPrompt();
 
 signals:
+    void rotaryEndCutPreviewStatusChanged(const QString& status);
     // 鼠标悬停世界位置变化信号
     // @param worldPos 新的世界坐标
     void hoveredWorldPositionChanged(const QVector3D& worldPos);
@@ -541,8 +544,8 @@ private:
     // 构建用户指定的方管中断切面和废面网格提示。
     std::vector<TransientPrimitive> buildRotaryEndCutPrimitives() const;
 
-    // 根据当前截面和加工断面状态重建高精度激光末端走线。
-    void rebuildRotaryEndCutLaserEndpointPreviewPaths();
+    // 根据当前截面和加工断面状态重建激光内壁作用点及期望断面内侧走线。
+    void rebuildRotaryEndCutPreviewPaths();
 
     // 构建选中图元的基点/控制点图元
     // @return 选中态手柄 overlay 图元列表
@@ -677,10 +680,13 @@ private:
     bool m_processDirectionVisible = true;
     bool m_processOrderVisible = true;
     bool m_rotaryEndCutsVisible = true;
+    bool m_rotaryLaserWallImpactVisible = true;
+    bool m_rotaryExpectedSurfaceVisible = true;
     std::optional<cadcam::machining::TubeSectionModel> m_rotaryEndCutPreviewSection;
-    double m_rotaryMachiningDepth = 0.0;
+    double m_rotaryTubeWallThickness = 0.0;
     cadcam::machine::RotaryMachinePolicy m_rotaryEndCutPreviewMachinePolicy;
-    std::vector<QVector<QVector3D>> m_rotaryEndCutLaserEndpointPreviewPaths;
+    std::vector<QVector<QVector3D>> m_rotaryEndCutLaserWallImpactPreviewPaths;
+    std::vector<QVector<QVector3D>> m_rotaryEndCutExpectedSurfacePreviewPaths;
     bool m_excludedEntitiesDimmed = true;
     bool m_backgroundGridVisible = true;
 

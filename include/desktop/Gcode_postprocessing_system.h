@@ -143,6 +143,7 @@ private:
     void initializeMachiningSettingsDock();
     void syncToolPanelState();
     void syncMachiningSettingsState();
+    double rotaryTubeWallThickness() const;
     void applyDefaultDrawingProperties();
     QString activeLayerName() const;
     QColor activeColor() const;
@@ -259,7 +260,7 @@ private:
     AppBranding m_branding;
     AppLicense m_license;
     RotaryTubeSectionModel m_rotaryTubeSectionModel;
-    double m_rotaryMachiningDepth = 0.0;
+    std::optional<double> m_rotaryTubeWallThicknessOverride;
     GProfile m_activeProfile = GProfile::createDefaultLaserProfile();
     cadcam::process::DocumentProcessState m_processState;
     std::optional<cadcam::planning::ProcessPlan> m_currentProcessPlan;

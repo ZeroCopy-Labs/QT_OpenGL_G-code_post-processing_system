@@ -312,6 +312,55 @@ namespace cadcam::machining
             return layout;
         }
 
+        SectionLayout buildInnerLayout(const TubeSectionModel& section, double wallThickness)
+        {
+            if (!std::isfinite(wallThickness) || wallThickness <= 0.0
+                || section.geometry.boundary.size() < 4U) return {};
+            double minimumY = std::numeric_limits<double>::max();
+            double maximumY = std::numeric_limits<double>::lowest();
+            double minimumZ = std::numeric_limits<double>::max();
+            double maximumZ = std::numeric_limits<double>::lowest();
+            for (const auto& point : section.geometry.boundary)
+            {
+                if (!finite(point)) return {};
+                minimumY = std::min(minimumY, point.x);
+                maximumY = std::max(maximumY, point.x);
+                minimumZ = std::min(minimumZ, point.y);
+                maximumZ = std::max(maximumZ, point.y);
+            }
+            const double innerMinimumY = minimumY + wallThickness;
+            const double innerMaximumY = maximumY - wallThickness;
+            const double innerMinimumZ = minimumZ + wallThickness;
+            const double innerMaximumZ = maximumZ - wallThickness;
+            if (innerMinimumY >= innerMaximumY || innerMinimumZ >= innerMaximumZ) return {};
+
+            // 复用同一套四边/四圆角布局。半径归零后圆角退化为直角，绝不产生负半径。
+            TubeSectionModel inner;
+            inner.geometry.boundary =
+            {
+                { innerMinimumY, innerMinimumZ }, { innerMaximumY, innerMinimumZ },
+                { innerMaximumY, innerMaximumZ }, { innerMinimumY, innerMaximumZ }
+            };
+            for (int yDirection : { -1, 1 })
+            for (int zDirection : { -1, 1 })
+            {
+                const auto outerCorner = cornerFor(section, yDirection, zDirection,
+                    minimumY, maximumY, minimumZ, maximumZ);
+                if (!std::isfinite(outerCorner.radius)) return {};
+                TubeCornerGeometry corner;
+                corner.radius = std::max(outerCorner.radius - wallThickness, 0.0);
+                corner.yDirection = yDirection;
+                corner.zDirection = zDirection;
+                corner.center =
+                {
+                    yDirection > 0 ? innerMaximumY - corner.radius : innerMinimumY + corner.radius,
+                    zDirection > 0 ? innerMaximumZ - corner.radius : innerMinimumZ + corner.radius
+                };
+                inner.corners.push_back(corner);
+            }
+            return buildLayout(inner);
+        }
+
         ProjectionCandidate projectToLine
         (
             const Vector2d& point,
@@ -447,6 +496,7 @@ namespace cadcam::machining
             }
 
             projection.zone = selected.zone;
+            projection.shellPoint = selected.shellPoint;
             projection.perimeterPosition = wrapPositive
                 (selected.perimeterPosition, layout.perimeter);
             projection.absoluteDistanceToShell = selected.distance;
@@ -797,6 +847,77 @@ namespace cadcam::machining
             return QStringLiteral("TopLeftToTopBoundary");
         }
         return QStringLiteral("Unknown");
+    }
+
+    std::optional<Vector2d> TubeSectionProjector::projectToInnerSurface
+    (
+        const TubeSectionModel& section,
+        double wallThickness,
+        const Vector2d& yzPoint
+    )
+    {
+        const auto projection = projectWithLayout(buildInnerLayout(section, wallThickness),
+            yzPoint, std::numeric_limits<double>::max());
+        return projection.valid ? std::optional<Vector2d>(projection.shellPoint) : std::nullopt;
+    }
+
+    geometry::Path3D TubeSectionProjector::connectInnerCorners
+    (
+        const TubeSectionModel& section,
+        double wallThickness,
+        const geometry::Path3D& path,
+        const Vector2d& xSlopes
+    )
+    {
+        const auto layout = buildInnerLayout(section, wallThickness);
+        if (!layout.valid || path.vertices.size() < 2U) return {};
+        geometry::Path3D result = path;
+        result.vertices.clear();
+        const double tolerance = std::max(1.0e-10, layout.scale * 1.0e-10);
+        for (std::size_t index = 0; index < path.vertices.size(); ++index)
+        {
+            const auto& start = path.vertices[index];
+            result.vertices.push_back(start);
+            if (index + 1U == path.vertices.size() && !path.closed) break;
+            const auto& end = path.vertices[(index + 1U) % path.vertices.size()];
+            const auto first = projectWithLayout(layout, { start.position.y, start.position.z }, tolerance);
+            const auto last = projectWithLayout(layout, { end.position.y, end.position.z }, tolerance);
+            if (!first.valid || !last.valid) return {};
+            const double delta = shortestPerimeterDelta(first.perimeterPosition,
+                last.perimeterPosition, layout.perimeter);
+            if (std::abs(delta) <= tolerance) continue;
+
+            std::vector<std::pair<double, Vector2d>> crossings;
+            for (std::size_t corner = 0; corner < 4U; ++corner)
+            {
+                if (layout.regions[corner * 2U + 1U].valid) continue; // 仍有内圆角。
+                const double travel = shortestPerimeterDelta(first.perimeterPosition,
+                    layout.boundaryPerimeterPositions[corner * 2U], layout.perimeter);
+                const double fraction = travel / delta;
+                if (fraction > 0.0 && fraction < 1.0
+                    && std::abs(travel) > tolerance && std::abs(delta - travel) > tolerance)
+                    crossings.emplace_back(fraction, layout.boundaryPoints[corner * 2U]);
+            }
+            std::sort(crossings.begin(), crossings.end(),
+                [](const auto& left, const auto& right) { return left.first < right.first; });
+            for (const auto& crossing : crossings)
+            {
+                const double fraction = crossing.first;
+                const double y = start.position.y + (end.position.y - start.position.y) * fraction;
+                const double z = start.position.z + (end.position.z - start.position.z) * fraction;
+                geometry::PathVertex3D vertex;
+                vertex.sourceParameter = start.sourceParameter
+                    + (end.sourceParameter - start.sourceParameter) * fraction;
+                vertex.position =
+                {
+                    start.position.x + (end.position.x - start.position.x) * fraction
+                        + xSlopes.x * (crossing.second.x - y) + xSlopes.y * (crossing.second.y - z),
+                    crossing.second.x, crossing.second.y
+                };
+                result.vertices.push_back(vertex);
+            }
+        }
+        return result;
     }
 
     TubeSectionProjection TubeSectionProjector::project

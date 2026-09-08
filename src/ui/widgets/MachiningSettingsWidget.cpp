@@ -86,12 +86,26 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     m_zWidthInput = createSectionInput(statusGroup);
     m_cornerRadiusInput = createSectionInput(statusGroup);
     m_cornerRadiusInput->setSingleStep(0.1);
-    m_machiningDepthInput = createSectionInput(statusGroup);
-    m_machiningDepthInput->setRange(0.0, 100000.0);
-    m_machiningDepthInput->setSingleStep(0.1);
-    m_machiningDepthInput->setSpecialValueText(QStringLiteral("未设置"));
-    m_machiningDepthInput->setToolTip(QStringLiteral(
-        "按当前四轴姿态和 Z 轴修正模拟固定长度激光，并显示末端走线；0 表示关闭，当前不参与排序、轨迹或 G 代码生成。"));
+    m_wallThicknessInput = createSectionInput(statusGroup);
+    m_wallThicknessInput->setObjectName(QStringLiteral("tubeWallThickness"));
+    m_wallThicknessInput->setRange(0.0, 100000.0);
+    m_wallThicknessInput->setSingleStep(0.1);
+    m_wallThicknessInput->setSpecialValueText(QStringLiteral("未设置"));
+    m_wallThicknessInput->setToolTip(QStringLiteral(
+        "默认取圆角半径，手动修改后保留；输入 0 可恢复默认值。内截面尺寸为外尺寸减去两倍壁厚，内圆角半径不小于 0；厚度须小于 Y 长、Z 宽的一半。两条线都投影到这个内轮廓，仅用于显示。"));
+    m_laserWallImpactVisibleCheckBox = new QCheckBox(QStringLiteral("激光内壁作用线（绿色）"), statusGroup);
+    m_laserWallImpactVisibleCheckBox->setObjectName(QStringLiteral("laserWallImpactVisible"));
+    m_laserWallImpactVisibleCheckBox->setChecked(true);
+    m_laserWallImpactVisibleCheckBox->setToolTip(QStringLiteral(
+        "先按四轴姿态和 Z 修正求候选点，再将 YZ 位置投到内截面轮廓；内圆角归零时补齐直角转折。仅是投影预览，不是激光射线与材料的完整求交仿真。"));
+    m_expectedSurfaceVisibleCheckBox = new QCheckBox(QStringLiteral("期望断面内侧走线（紫色）"), statusGroup);
+    m_expectedSurfaceVisibleCheckBox->setObjectName(QStringLiteral("expectedSurfaceVisible"));
+    m_expectedSurfaceVisibleCheckBox->setChecked(true);
+    m_expectedSurfaceVisibleCheckBox->setToolTip(QStringLiteral(
+        "与绿色作用线投影到相同内轮廓，由圆角推断的局部断面方向求 X，直角处也补入转折点；曲线边保留自身形状。边两端方向不一致时报错。两条走线还受加工标记和加工断面标记总开关控制。"));
+    m_endCutPreviewStatusValue = createStatusValue(statusGroup);
+    m_endCutPreviewStatusValue->setObjectName(QStringLiteral("endCutPreviewStatus"));
+    m_endCutPreviewStatusValue->setWordWrap(true);
     m_applyManualSectionButton = new QPushButton(QStringLiteral("应用手动截面"), statusGroup);
     m_applyManualSectionButton->setToolTip
         (QStringLiteral("手动设置优先用于后续内部线识别、加工断面、排序和导出。"));
@@ -102,7 +116,10 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     statusLayout->addRow(QStringLiteral("Y 长："), m_yLengthInput);
     statusLayout->addRow(QStringLiteral("Z 宽："), m_zWidthInput);
     statusLayout->addRow(QStringLiteral("圆角半径："), m_cornerRadiusInput);
-    statusLayout->addRow(QStringLiteral("加工深度："), m_machiningDepthInput);
+    statusLayout->addRow(QStringLiteral("方管厚度："), m_wallThicknessInput);
+    statusLayout->addRow(QString(), m_laserWallImpactVisibleCheckBox);
+    statusLayout->addRow(QString(), m_expectedSurfaceVisibleCheckBox);
+    statusLayout->addRow(QStringLiteral("走线状态："), m_endCutPreviewStatusValue);
     statusLayout->addRow(QString(), m_applyManualSectionButton);
     statusLayout->addRow(QStringLiteral("圆角数量："), m_roundedCornerCountValue);
     statusLayout->addRow(QStringLiteral("中心线位置："), m_centerLineValue);
@@ -171,13 +188,22 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
             m_cornerRadiusInput->value()
         );
     });
-    connect(m_machiningDepthInput, &QDoubleSpinBox::editingFinished, this, [this]()
+    connect(m_wallThicknessInput, &QDoubleSpinBox::editingFinished, this, [this]()
     {
         if (!m_updatingUi)
         {
-            emit rotaryMachiningDepthChanged(m_machiningDepthInput->value());
+            emit rotaryTubeWallThicknessChanged(m_wallThicknessInput->value());
         }
     });
+    connect(m_laserWallImpactVisibleCheckBox, &QCheckBox::toggled,
+        this, &MachiningSettingsWidget::rotaryLaserWallImpactVisibleChanged);
+    connect(m_expectedSurfaceVisibleCheckBox, &QCheckBox::toggled,
+        this, &MachiningSettingsWidget::rotaryExpectedSurfaceVisibleChanged);
+}
+
+void MachiningSettingsWidget::setRotaryEndCutPreviewStatus(const QString& status)
+{
+    m_endCutPreviewStatusValue->setText(status);
 }
 
 void MachiningSettingsWidget::setAutomaticOptions
@@ -264,10 +290,10 @@ void MachiningSettingsWidget::setRotaryEndCutCount(int count)
         : QStringLiteral("未识别"));
 }
 
-void MachiningSettingsWidget::setRotaryMachiningDepth(double machiningDepth)
+void MachiningSettingsWidget::setRotaryTubeWallThickness(double wallThickness)
 {
     m_updatingUi = true;
-    m_machiningDepthInput->setValue(std::max(0.0, machiningDepth));
+    m_wallThicknessInput->setValue(std::max(0.0, wallThickness));
     m_updatingUi = false;
 }
 

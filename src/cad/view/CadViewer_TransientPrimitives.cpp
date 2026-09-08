@@ -9,6 +9,10 @@
 #include "cad/view/rendering/CadProcessVisualUtils.h"
 #include "compatibility/legacy/LegacyCadItemPathBridge.h"
 #include "core/machine/RotaryKinematics.h"
+#include "core/machining/CutSurfaceExpectation.h"
+#include "core/machining/TubeSectionProjector.h"
+
+#include <QStringList>
 
 #include <algorithm>
 #include <cmath>
@@ -37,10 +41,23 @@ namespace
             item,
             policy,
             options,
-            createOperationContext(QStringLiteral("build-laser-endpoint-preview"))
+            createOperationContext(QStringLiteral("build-cut-surface-preview"))
         );
         if (!result.succeeded() || !result.value.has_value()) return std::nullopt;
         return std::move(*result.value);
+    }
+
+    QVector<QVector3D> previewVertices(const Path3D& path)
+    {
+        QVector<QVector3D> vertices;
+        vertices.reserve(static_cast<qsizetype>(path.vertices.size() + (path.closed ? 1U : 0U)));
+        for (const auto& vertex : path.vertices)
+        {
+            vertices.push_back(QVector3D(static_cast<float>(vertex.position.x),
+                static_cast<float>(vertex.position.y), static_cast<float>(vertex.position.z)));
+        }
+        if (path.closed && !vertices.isEmpty()) vertices.push_back(vertices.front());
+        return vertices;
     }
 
     QVector3D buildPerpendicularDirection(const QVector3D& direction)
@@ -103,18 +120,35 @@ std::vector<TransientPrimitive> CadViewer::buildTransientPrimitives() const
     return CadPreviewBuilder::buildTransientPrimitives(m_controller.drawState(), selectedEntity(), selectedEntities());
 }
 
-void CadViewer::rebuildRotaryEndCutLaserEndpointPreviewPaths()
+void CadViewer::rebuildRotaryEndCutPreviewPaths()
 {
-    m_rotaryEndCutLaserEndpointPreviewPaths.clear();
+    m_rotaryEndCutLaserWallImpactPreviewPaths.clear();
+    m_rotaryEndCutExpectedSurfacePreviewPaths.clear();
     CadDocument* scene = m_sceneCoordinator.document();
     if (scene == nullptr || m_processState == nullptr
         || !m_rotaryEndCutPreviewSection.has_value()
-        || !std::isfinite(m_rotaryMachiningDepth)
-        || m_rotaryMachiningDepth <= 0.0)
+        || !std::isfinite(m_rotaryTubeWallThickness)
+        || m_rotaryTubeWallThickness <= 0.0)
     {
+        emit rotaryEndCutPreviewStatusChanged(QStringLiteral("需有效方管截面、加工断面和大于 0 的方管厚度。"));
         return;
     }
 
+    if (!cadcam::machining::TubeSectionProjector::projectToInnerSurface
+        (*m_rotaryEndCutPreviewSection, m_rotaryTubeWallThickness, { 0.0, 0.0 }).has_value())
+    {
+        emit rotaryEndCutPreviewStatusChanged(QStringLiteral(
+            "无法建立内截面：方管厚度必须小于 Y 长、Z 宽的一半，且截面几何必须有效。"));
+        return;
+    }
+
+    struct BoundaryPreview
+    {
+        std::vector<Path3D> sources;
+        std::vector<Path3D> endpoints;
+        bool complete = true;
+    };
+    std::map<int, BoundaryPreview> boundaries;
     for (const std::unique_ptr<CadItem>& entity : scene->m_entities)
     {
         if (entity == nullptr) continue;
@@ -125,8 +159,13 @@ void CadViewer::rebuildRotaryEndCutLaserEndpointPreviewPaths()
             continue;
         }
 
+        auto& boundary = boundaries[state.overrideData.boundaryPairId];
         const std::optional<Path3D> path = buildPrecisePreviewPath(*entity);
-        if (!path.has_value() || path->vertices.size() < 2U) continue;
+        if (!path.has_value() || path->vertices.size() < 2U)
+        {
+            boundary.complete = false;
+            continue;
+        }
 
         const auto solved = cadcam::machine::RotaryKinematics::transform
         (
@@ -134,17 +173,17 @@ void CadViewer::rebuildRotaryEndCutLaserEndpointPreviewPaths()
             m_rotaryEndCutPreviewMachinePolicy,
             m_rotaryEndCutPreviewSection,
             std::nullopt,
-            createOperationContext(QStringLiteral("solve-laser-endpoint-preview"))
+            createOperationContext(QStringLiteral("solve-laser-wall-impact-preview"))
         );
         if (!solved.succeeded() || !solved.value.has_value()
             || solved.value->poses.size() != path->vertices.size())
         {
+            boundary.complete = false;
             continue;
         }
 
-        QVector<QVector3D> endpointVertices;
-        endpointVertices.reserve(static_cast<qsizetype>
-            (path->vertices.size() + (path->closed ? 1U : 0U)));
+        Path3D endpointPath = *path;
+        std::size_t index = 0;
         bool mapped = true;
         for (const cadcam::machine::MachinePose4D& pose : solved.value->poses)
         {
@@ -155,33 +194,66 @@ void CadViewer::rebuildRotaryEndCutLaserEndpointPreviewPaths()
                 mapped = false;
                 break;
             }
-            const Vector3d endpoint
+            Vector3d endpoint
             {
                 toolRay->origin.x
-                    + toolRay->unitDirection.x * m_rotaryMachiningDepth,
+                    + toolRay->unitDirection.x * m_rotaryTubeWallThickness,
                 toolRay->origin.y
-                    + toolRay->unitDirection.y * m_rotaryMachiningDepth,
+                    + toolRay->unitDirection.y * m_rotaryTubeWallThickness,
                 toolRay->origin.z
-                    + toolRay->unitDirection.z * m_rotaryMachiningDepth
+                    + toolRay->unitDirection.z * m_rotaryTubeWallThickness
             };
-            endpointVertices.push_back(QVector3D
-            (
-                static_cast<float>(endpoint.x),
-                static_cast<float>(endpoint.y),
-                static_cast<float>(endpoint.z)
-            ));
-        }
-        if (mapped && path->closed && !endpointVertices.isEmpty())
-        {
-            endpointVertices.push_back(endpointVertices.front());
+            // 两条走线共用内轮廓上的 YZ 落点，避免厚壁圆角的反向弯曲。
+            const auto innerPoint = cadcam::machining::TubeSectionProjector::projectToInnerSurface
+                (*m_rotaryEndCutPreviewSection, m_rotaryTubeWallThickness, { endpoint.y, endpoint.z });
+            if (!innerPoint.has_value())
+            {
+                mapped = false;
+                break;
+            }
+            endpoint.y = innerPoint->x;
+            endpoint.z = innerPoint->y;
+            endpointPath.vertices[index++].position = endpoint;
         }
 
         if (mapped)
         {
-            m_rotaryEndCutLaserEndpointPreviewPaths.push_back
-                (std::move(endpointVertices));
+            m_rotaryEndCutLaserWallImpactPreviewPaths.push_back
+                (previewVertices(cadcam::machining::TubeSectionProjector::connectInnerCorners
+                    (*m_rotaryEndCutPreviewSection, m_rotaryTubeWallThickness, endpointPath)));
+            boundary.sources.push_back(*path);
+            boundary.endpoints.push_back(std::move(endpointPath));
         }
+        else boundary.complete = false;
     }
+
+    QStringList messages;
+    int expectedCount = 0;
+    for (const auto& entry : boundaries)
+    {
+        const auto& boundary = entry.second;
+        if (!boundary.complete)
+        {
+            messages.push_back(QStringLiteral("断面 %1：路径采样或刀头姿态解算失败。")
+                .arg(entry.first));
+            continue;
+        }
+        const auto expected = cadcam::machining::CutSurfaceExpectation::build
+            (*m_rotaryEndCutPreviewSection, boundary.sources, boundary.endpoints);
+        if (!expected.errorMessage.isEmpty())
+        {
+            messages.push_back(QStringLiteral("断面 %1：%2").arg(entry.first).arg(expected.errorMessage));
+            continue;
+        }
+        for (const auto& path : expected.paths)
+            m_rotaryEndCutExpectedSurfacePreviewPaths.push_back(previewVertices(
+                cadcam::machining::TubeSectionProjector::connectInnerCorners
+                    (*m_rotaryEndCutPreviewSection, m_rotaryTubeWallThickness, path, expected.xSlopes)));
+        ++expectedCount;
+    }
+    messages.prepend(QStringLiteral("期望走线：%1 / %2 个断面可用。")
+        .arg(expectedCount).arg(boundaries.size()));
+    emit rotaryEndCutPreviewStatusChanged(messages.join(QLatin1Char('\n')));
 }
 
 std::vector<CadViewer::ProcessUnitArrowOverlay>
@@ -358,7 +430,7 @@ std::vector<TransientPrimitive> CadViewer::buildRotaryEndCutPrimitives() const
     const float pixelScale = std::max(pixelToWorldScale(), 1.0e-4f);
     const QVector3D screenOffset = m_camera.rightDirection().normalized() * pixelScale * 1.4f;
     const bool darkBackground = m_theme.viewerBackgroundColor.lightnessF() < 0.5;
-    const QVector3D laserEndpointColor = darkBackground
+    const QVector3D laserWallImpactColor = darkBackground
         ? QVector3D(0.22f, 0.92f, 0.66f)
         : QVector3D(0.05f, 0.55f, 0.38f);
 
@@ -396,17 +468,26 @@ std::vector<TransientPrimitive> CadViewer::buildRotaryEndCutPrimitives() const
 
     }
 
-    for (const QVector<QVector3D>& endpointVertices
-        : m_rotaryEndCutLaserEndpointPreviewPaths)
+    const auto appendPreviewPaths = [&](const std::vector<QVector<QVector3D>>& paths,
+        const QVector3D& color, bool visible)
     {
-        if (endpointVertices.size() < 2) continue;
-        TransientPrimitive endpointPath;
-        endpointPath.primitiveType = GL_LINE_STRIP;
-        endpointPath.color = laserEndpointColor;
-        endpointPath.opacity = 0.86f;
-        endpointPath.vertices = endpointVertices;
-        primitives.push_back(std::move(endpointPath));
-    }
+        if (!visible) return;
+        for (const auto& vertices : paths)
+        {
+            if (vertices.size() < 2) continue;
+            TransientPrimitive path;
+            path.primitiveType = GL_LINE_STRIP;
+            path.color = color;
+            path.opacity = 0.86f;
+            path.vertices = vertices;
+            primitives.push_back(std::move(path));
+        }
+    };
+    appendPreviewPaths(m_rotaryEndCutLaserWallImpactPreviewPaths,
+        laserWallImpactColor, m_rotaryLaserWallImpactVisible);
+    appendPreviewPaths(m_rotaryEndCutExpectedSurfacePreviewPaths,
+        darkBackground ? QVector3D(1.0f, 0.45f, 0.92f) : QVector3D(0.65f, 0.12f, 0.65f),
+        m_rotaryExpectedSurfaceVisible);
 
     return primitives;
 }

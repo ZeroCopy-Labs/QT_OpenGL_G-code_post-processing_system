@@ -565,6 +565,9 @@
     <ClCompile Include="src\core\machining\TubeSectionProjector.cpp">
       <Filter>Source Files\core\machining</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\machining\CutSurfaceExpectation.cpp">
+      <Filter>Source Files\core\machining</Filter>
+    </ClCompile>
     <ClCompile Include="src\core\machine\RotaryKinematics.cpp">
       <Filter>Source Files\core\machine</Filter>
     </ClCompile>
@@ -841,6 +844,9 @@
       <Filter>Header Files\core\machining</Filter>
     </ClInclude>
     <ClInclude Include="include\core\machining\TubeSectionProjector.h">
+      <Filter>Header Files\core\machining</Filter>
+    </ClInclude>
+    <ClInclude Include="include\core\machining\CutSurfaceExpectation.h">
       <Filter>Header Files\core\machining</Filter>
     </ClInclude>
     <ClInclude Include="include\core\machine\MachineTrajectory.h">

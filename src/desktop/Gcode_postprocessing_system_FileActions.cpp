@@ -81,6 +81,7 @@ bool Gcode_postprocessing_system::importDxfFile(const QString& filePath)
         return false;
     }
     m_rotaryTubeSectionModel = RotaryTubeSectionModel();
+    m_rotaryTubeWallThicknessOverride.reset();
     m_currentDocumentPath = ensureDxfSuffix(filePath);
     ui->openGLWidget->setDocument(&m_document);
     ui->openGLWidget->clearSelection();
@@ -216,6 +217,7 @@ bool Gcode_postprocessing_system::importBitmapFile(const QString& filePath)
         m_processState.clear();
         invalidateCurrentProcessPlan();
         m_rotaryTubeSectionModel = RotaryTubeSectionModel();
+        m_rotaryTubeWallThicknessOverride.reset();
         m_currentDocumentPath.clear();
         ui->openGLWidget->clearSelection();
     }

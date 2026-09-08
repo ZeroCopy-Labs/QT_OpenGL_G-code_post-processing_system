@@ -10,6 +10,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace cadcam::machining
@@ -52,6 +53,7 @@ namespace cadcam::machining
 
     struct TubeSectionProjection
     {
+        geometry::Vector2d shellPoint;
         TubeZone16 zone = TubeZone16::TopFace;
         double perimeterPosition = 0.0;
         double signedDistanceToShell = 0.0;
@@ -91,6 +93,24 @@ namespace cadcam::machining
     class TubeSectionProjector
     {
     public:
+        // 将预览候选点投到壁厚定义的内轮廓；不是射线与实体的加工仿真。
+        static std::optional<geometry::Vector2d> projectToInnerSurface
+        (
+            const TubeSectionModel& section,
+            double wallThickness,
+            const geometry::Vector2d& yzPoint
+        );
+
+        // 输入点已在内轮廓上；补入跨边处的尖角，避免连线抄近路穿过内腔。
+        // xSlopes 用于期望线的局部断面方向修正；激光作用线使用默认值。
+        static geometry::Path3D connectInnerCorners
+        (
+            const TubeSectionModel& section,
+            double wallThickness,
+            const geometry::Path3D& path,
+            const geometry::Vector2d& xSlopes = {}
+        );
+
         static TubeSectionProjection project
         (
             const TubeSectionModel& section,

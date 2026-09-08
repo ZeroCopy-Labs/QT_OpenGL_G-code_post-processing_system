@@ -309,19 +309,31 @@ void CadViewer::setRotaryEndCutsVisible(bool visible)
     update();
 }
 
-void CadViewer::setRotaryEndCutLaserEndpointPreview
+void CadViewer::setRotaryLaserWallImpactVisible(bool visible)
+{
+    m_rotaryLaserWallImpactVisible = visible;
+    update();
+}
+
+void CadViewer::setRotaryExpectedSurfaceVisible(bool visible)
+{
+    m_rotaryExpectedSurfaceVisible = visible;
+    update();
+}
+
+void CadViewer::setRotaryEndCutPreview
 (
     const std::optional<cadcam::machining::TubeSectionModel>& section,
-    double machiningDepth,
+    double wallThickness,
     const cadcam::machine::RotaryMachinePolicy& machinePolicy
 )
 {
     m_rotaryEndCutPreviewSection = section;
-    m_rotaryMachiningDepth =
-        std::isfinite(machiningDepth) && machiningDepth > 0.0
-            ? machiningDepth : 0.0;
+    m_rotaryTubeWallThickness =
+        std::isfinite(wallThickness) && wallThickness > 0.0
+            ? wallThickness : 0.0;
     m_rotaryEndCutPreviewMachinePolicy = machinePolicy;
-    rebuildRotaryEndCutLaserEndpointPreviewPaths();
+    rebuildRotaryEndCutPreviewPaths();
     update();
 }
 
@@ -810,7 +822,7 @@ void CadViewer::handleDocumentSceneChanged()
         m_windowPreviewRenderKeys.clear();
     }
 
-    rebuildRotaryEndCutLaserEndpointPreviewPaths();
+    rebuildRotaryEndCutPreviewPaths();
 
     // 如果图形协调器已初始化，则重建缓冲
     if (m_graphicsCoordinator.isInitialized())

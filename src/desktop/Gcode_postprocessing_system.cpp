@@ -1881,36 +1881,40 @@ void Gcode_postprocessing_system::initializeMachiningSettingsDock()
     connect
     (
         m_machiningSettingsWidget,
-        &MachiningSettingsWidget::rotaryMachiningDepthChanged,
+        &MachiningSettingsWidget::rotaryTubeWallThicknessChanged,
         this,
-        [this](double machiningDepth)
+        [this](double wallThickness)
         {
-            if (!std::isfinite(machiningDepth) || machiningDepth < 0.0)
+            if (!std::isfinite(wallThickness) || wallThickness < 0.0)
             {
-                m_machiningSettingsWidget->setRotaryMachiningDepth
-                    (m_rotaryMachiningDepth);
+                m_machiningSettingsWidget->setRotaryTubeWallThickness
+                    (rotaryTubeWallThickness());
                 return;
             }
 
-            m_rotaryMachiningDepth = machiningDepth;
-            const std::optional<cadcam::machining::TubeSectionModel> section =
-                m_rotaryTubeSectionModel.valid
-                ? m_rotaryTubeSectionModel.coreModel : std::nullopt;
-            ui->openGLWidget->setRotaryEndCutLaserEndpointPreview
-            (
-                section,
-                m_rotaryMachiningDepth,
-                rotaryEndCutPreviewMachinePolicy(m_activeProfile, section)
-            );
+            // 输入框显示三位小数；仅聚焦后离开不应把默认值变成手动覆盖。
+            if (wallThickness > 0.0
+                && std::abs(wallThickness - rotaryTubeWallThickness()) < 0.0005) return;
+            m_rotaryTubeWallThicknessOverride = wallThickness > 0.0
+                ? std::optional<double>(wallThickness) : std::nullopt;
+            syncMachiningSettingsState();
 
-            const QString message = machiningDepth > 0.0
-                ? QStringLiteral("加工深度已设置为 %1 mm；画布显示激光末端走线，该参数当前仅用于显示。")
-                    .arg(machiningDepth, 0, 'f', 3)
-                : QStringLiteral("已关闭激光末端走线显示。");
+            const QString message = wallThickness > 0.0
+                ? QStringLiteral("方管厚度已设置为 %1 mm；内壁作用线和期望走线均按此厚度预览，仅用于显示。")
+                    .arg(wallThickness, 0, 'f', 3)
+                : QStringLiteral("方管厚度已恢复为圆角半径默认值：%1 mm。")
+                    .arg(rotaryTubeWallThickness(), 0, 'f', 3);
             ui->openGLWidget->appendCommandMessage(message);
             statusBar()->showMessage(message, 4000);
         }
     );
+
+    connect(m_machiningSettingsWidget, &MachiningSettingsWidget::rotaryLaserWallImpactVisibleChanged,
+        ui->openGLWidget, &CadViewer::setRotaryLaserWallImpactVisible);
+    connect(m_machiningSettingsWidget, &MachiningSettingsWidget::rotaryExpectedSurfaceVisibleChanged,
+        ui->openGLWidget, &CadViewer::setRotaryExpectedSurfaceVisible);
+    connect(ui->openGLWidget, &CadViewer::rotaryEndCutPreviewStatusChanged,
+        m_machiningSettingsWidget, &MachiningSettingsWidget::setRotaryEndCutPreviewStatus);
 
     syncMachiningSettingsState();
 }
@@ -2259,6 +2263,12 @@ void Gcode_postprocessing_system::syncToolPanelState()
     );
 }
 
+double Gcode_postprocessing_system::rotaryTubeWallThickness() const
+{
+    return m_rotaryTubeWallThicknessOverride.value_or
+        (m_rotaryTubeSectionModel.valid ? m_rotaryTubeSectionModel.cornerRadius : 0.0);
+}
+
 void Gcode_postprocessing_system::syncMachiningSettingsState()
 {
     QElapsedTimer performanceTimer;
@@ -2307,15 +2317,15 @@ void Gcode_postprocessing_system::syncMachiningSettingsState()
         m_rotaryTubeSectionModel.centerY,
         m_rotaryTubeSectionModel.centerZ
     );
-    m_machiningSettingsWidget->setRotaryMachiningDepth
-        (m_rotaryMachiningDepth);
+    m_machiningSettingsWidget->setRotaryTubeWallThickness
+        (rotaryTubeWallThickness());
     const std::optional<cadcam::machining::TubeSectionModel> section =
         m_rotaryTubeSectionModel.valid
         ? m_rotaryTubeSectionModel.coreModel : std::nullopt;
-    ui->openGLWidget->setRotaryEndCutLaserEndpointPreview
+    ui->openGLWidget->setRotaryEndCutPreview
     (
         section,
-        m_rotaryMachiningDepth,
+        rotaryTubeWallThickness(),
         rotaryEndCutPreviewMachinePolicy(m_activeProfile, section)
     );
 
