@@ -86,6 +86,12 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     m_zWidthInput = createSectionInput(statusGroup);
     m_cornerRadiusInput = createSectionInput(statusGroup);
     m_cornerRadiusInput->setSingleStep(0.1);
+    m_machiningDepthInput = createSectionInput(statusGroup);
+    m_machiningDepthInput->setRange(0.0, 100000.0);
+    m_machiningDepthInput->setSingleStep(0.1);
+    m_machiningDepthInput->setSpecialValueText(QStringLiteral("未设置"));
+    m_machiningDepthInput->setToolTip(QStringLiteral(
+        "按当前四轴姿态和 Z 轴修正模拟固定长度激光，并显示末端走线；0 表示关闭，当前不参与排序、轨迹或 G 代码生成。"));
     m_applyManualSectionButton = new QPushButton(QStringLiteral("应用手动截面"), statusGroup);
     m_applyManualSectionButton->setToolTip
         (QStringLiteral("手动设置优先用于后续内部线识别、加工断面、排序和导出。"));
@@ -96,6 +102,7 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     statusLayout->addRow(QStringLiteral("Y 长："), m_yLengthInput);
     statusLayout->addRow(QStringLiteral("Z 宽："), m_zWidthInput);
     statusLayout->addRow(QStringLiteral("圆角半径："), m_cornerRadiusInput);
+    statusLayout->addRow(QStringLiteral("加工深度："), m_machiningDepthInput);
     statusLayout->addRow(QString(), m_applyManualSectionButton);
     statusLayout->addRow(QStringLiteral("圆角数量："), m_roundedCornerCountValue);
     statusLayout->addRow(QStringLiteral("中心线位置："), m_centerLineValue);
@@ -163,6 +170,13 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
             m_zWidthInput->value(),
             m_cornerRadiusInput->value()
         );
+    });
+    connect(m_machiningDepthInput, &QDoubleSpinBox::editingFinished, this, [this]()
+    {
+        if (!m_updatingUi)
+        {
+            emit rotaryMachiningDepthChanged(m_machiningDepthInput->value());
+        }
     });
 }
 
@@ -248,6 +262,13 @@ void MachiningSettingsWidget::setRotaryEndCutCount(int count)
     m_rotaryEndCutCountValue->setText(count > 0
         ? QStringLiteral("已识别 %1 个").arg(count)
         : QStringLiteral("未识别"));
+}
+
+void MachiningSettingsWidget::setRotaryMachiningDepth(double machiningDepth)
+{
+    m_updatingUi = true;
+    m_machiningDepthInput->setValue(std::max(0.0, machiningDepth));
+    m_updatingUi = false;
 }
 
 void MachiningSettingsWidget::updateAutomaticOptionDependencies()

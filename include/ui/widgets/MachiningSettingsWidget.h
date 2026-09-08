@@ -29,6 +29,7 @@ public:
         double centerZ
     );
     void setRotaryEndCutCount(int count);
+    void setRotaryMachiningDepth(double machiningDepth);
 
 signals:
     void autoDeduplicateOnImportChanged(bool enabled);
@@ -38,6 +39,7 @@ signals:
     void useDefaultExportDirectoryChanged(bool enabled);
     void useDxfFileNameChanged(bool enabled);
     void manualRotaryTubeSectionRequested(double yLength, double zWidth, double cornerRadius);
+    void rotaryMachiningDepthChanged(double machiningDepth);
 
 private:
     void updateAutomaticOptionDependencies();
@@ -54,6 +56,7 @@ private:
     QDoubleSpinBox* m_yLengthInput = nullptr;
     QDoubleSpinBox* m_zWidthInput = nullptr;
     QDoubleSpinBox* m_cornerRadiusInput = nullptr;
+    QDoubleSpinBox* m_machiningDepthInput = nullptr;
     QPushButton* m_applyManualSectionButton = nullptr;
     QLabel* m_roundedCornerCountValue = nullptr;
     QLabel* m_centerLineValue = nullptr;

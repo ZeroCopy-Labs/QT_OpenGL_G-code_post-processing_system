@@ -356,6 +356,36 @@ namespace cadcam::machine
         }
     }
 
+    std::optional<SourceToolRay> RotaryKinematics::sourceToolRay
+    (
+        const MachinePose4D& toolPose,
+        const RotaryMachinePolicy& policy
+    )
+    {
+        if (!std::isfinite(toolPose.x) || !std::isfinite(toolPose.y)
+            || !std::isfinite(toolPose.z) || !std::isfinite(toolPose.aDegrees)
+            || !std::isfinite(policy.rotaryAxisY)
+            || !std::isfinite(policy.rotaryAxisZ))
+        {
+            return std::nullopt;
+        }
+
+        const double radians = toolPose.aDegrees / kRadiansToDegrees;
+        const double cosine = std::cos(radians);
+        const double sine = std::sin(radians);
+        const double machineY = toolPose.y - policy.rotaryAxisY;
+        const double machineZ = toolPose.z - policy.rotaryAxisZ;
+        SourceToolRay ray;
+        ray.origin =
+        {
+            toolPose.x,
+            policy.rotaryAxisY + machineY * cosine + machineZ * sine,
+            policy.rotaryAxisZ - machineY * sine + machineZ * cosine
+        };
+        ray.unitDirection = { 0.0, -sine, -cosine };
+        return ray;
+    }
+
     geometry::Vector3d RotaryKinematics::sourceLocalClearancePose
     (
         const geometry::Vector3d& cutEnd,

@@ -7,17 +7,42 @@
 #include "cad/items/CadItem.h"
 #include "cad/view/rendering/CadPreviewBuilder.h"
 #include "cad/view/rendering/CadProcessVisualUtils.h"
+#include "compatibility/legacy/LegacyCadItemPathBridge.h"
+#include "core/machine/RotaryKinematics.h"
 
 #include <algorithm>
 #include <cmath>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <utility>
 #include <vector>
 
 namespace
 {
+    using cadcam::geometry::Path3D;
+    using cadcam::geometry::Vector3d;
+    std::optional<Path3D> buildPrecisePreviewPath(const CadItem& item)
+    {
+        cadcam::geometry::SamplingPolicy policy =
+            LegacyCadItemPathBridge::legacySamplingPolicy(item);
+        policy.fullTurnSegments = std::max(policy.fullTurnSegments, 512);
+        policy.minimumBulgeSegments = std::max(policy.minimumBulgeSegments, 16);
+        policy.maximumAngularStep = 6.28318530717958647692 / 512.0;
+
+        cadcam::geometry::PathCompileOptions options;
+        const auto result = LegacyCadItemPathBridge::compile
+        (
+            item,
+            policy,
+            options,
+            createOperationContext(QStringLiteral("build-laser-endpoint-preview"))
+        );
+        if (!result.succeeded() || !result.value.has_value()) return std::nullopt;
+        return std::move(*result.value);
+    }
+
     QVector3D buildPerpendicularDirection(const QVector3D& direction)
     {
         QVector3D normalizedDirection = direction;
@@ -76,6 +101,87 @@ namespace
 std::vector<TransientPrimitive> CadViewer::buildTransientPrimitives() const
 {
     return CadPreviewBuilder::buildTransientPrimitives(m_controller.drawState(), selectedEntity(), selectedEntities());
+}
+
+void CadViewer::rebuildRotaryEndCutLaserEndpointPreviewPaths()
+{
+    m_rotaryEndCutLaserEndpointPreviewPaths.clear();
+    CadDocument* scene = m_sceneCoordinator.document();
+    if (scene == nullptr || m_processState == nullptr
+        || !m_rotaryEndCutPreviewSection.has_value()
+        || !std::isfinite(m_rotaryMachiningDepth)
+        || m_rotaryMachiningDepth <= 0.0)
+    {
+        return;
+    }
+
+    for (const std::unique_ptr<CadItem>& entity : scene->m_entities)
+    {
+        if (entity == nullptr) continue;
+        const auto state = m_processState->stateOrDefault(entity->m_entityId);
+        if (state.overrideData.boundaryRole != cadcam::planning::BoundaryRole::Break
+            || state.overrideData.boundaryPairId < 0)
+        {
+            continue;
+        }
+
+        const std::optional<Path3D> path = buildPrecisePreviewPath(*entity);
+        if (!path.has_value() || path->vertices.size() < 2U) continue;
+
+        const auto solved = cadcam::machine::RotaryKinematics::transform
+        (
+            *path,
+            m_rotaryEndCutPreviewMachinePolicy,
+            m_rotaryEndCutPreviewSection,
+            std::nullopt,
+            createOperationContext(QStringLiteral("solve-laser-endpoint-preview"))
+        );
+        if (!solved.succeeded() || !solved.value.has_value()
+            || solved.value->poses.size() != path->vertices.size())
+        {
+            continue;
+        }
+
+        QVector<QVector3D> endpointVertices;
+        endpointVertices.reserve(static_cast<qsizetype>
+            (path->vertices.size() + (path->closed ? 1U : 0U)));
+        bool mapped = true;
+        for (const cadcam::machine::MachinePose4D& pose : solved.value->poses)
+        {
+            const auto toolRay = cadcam::machine::RotaryKinematics::sourceToolRay
+                (pose, m_rotaryEndCutPreviewMachinePolicy);
+            if (!toolRay.has_value())
+            {
+                mapped = false;
+                break;
+            }
+            const Vector3d endpoint
+            {
+                toolRay->origin.x
+                    + toolRay->unitDirection.x * m_rotaryMachiningDepth,
+                toolRay->origin.y
+                    + toolRay->unitDirection.y * m_rotaryMachiningDepth,
+                toolRay->origin.z
+                    + toolRay->unitDirection.z * m_rotaryMachiningDepth
+            };
+            endpointVertices.push_back(QVector3D
+            (
+                static_cast<float>(endpoint.x),
+                static_cast<float>(endpoint.y),
+                static_cast<float>(endpoint.z)
+            ));
+        }
+        if (mapped && path->closed && !endpointVertices.isEmpty())
+        {
+            endpointVertices.push_back(endpointVertices.front());
+        }
+
+        if (mapped)
+        {
+            m_rotaryEndCutLaserEndpointPreviewPaths.push_back
+                (std::move(endpointVertices));
+        }
+    }
 }
 
 std::vector<CadViewer::ProcessUnitArrowOverlay>
@@ -251,6 +357,10 @@ std::vector<TransientPrimitive> CadViewer::buildRotaryEndCutPrimitives() const
     std::vector<TransientPrimitive> primitives;
     const float pixelScale = std::max(pixelToWorldScale(), 1.0e-4f);
     const QVector3D screenOffset = m_camera.rightDirection().normalized() * pixelScale * 1.4f;
+    const bool darkBackground = m_theme.viewerBackgroundColor.lightnessF() < 0.5;
+    const QVector3D laserEndpointColor = darkBackground
+        ? QVector3D(0.22f, 0.92f, 0.66f)
+        : QVector3D(0.05f, 0.55f, 0.38f);
 
     for (const std::unique_ptr<CadItem>& entity : scene->m_entities)
     {
@@ -283,6 +393,19 @@ std::vector<TransientPrimitive> CadViewer::buildRotaryEndCutPrimitives() const
 
             primitives.push_back(std::move(path));
         }
+
+    }
+
+    for (const QVector<QVector3D>& endpointVertices
+        : m_rotaryEndCutLaserEndpointPreviewPaths)
+    {
+        if (endpointVertices.size() < 2) continue;
+        TransientPrimitive endpointPath;
+        endpointPath.primitiveType = GL_LINE_STRIP;
+        endpointPath.color = laserEndpointColor;
+        endpointPath.opacity = 0.86f;
+        endpointPath.vertices = endpointVertices;
+        primitives.push_back(std::move(endpointPath));
     }
 
     return primitives;

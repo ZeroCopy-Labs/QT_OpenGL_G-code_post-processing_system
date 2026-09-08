@@ -8,6 +8,7 @@
 #include "ui/dialogs/GProfileManagerDialog.h"
 #include "infrastructure/config/MachiningParameterStore.h"
 #include "infrastructure/config/GProfilePathStore.h"
+#include "core/machine/MachineTrajectory.h"
 #include "ui/widgets/MachiningSettingsWidget.h"
 
 #include <QActionGroup>
@@ -50,6 +51,37 @@ namespace
     constexpr const char* kDisplayTitleSettingsKey = "DisplayTitle";
     constexpr int kColorByLayer = 256;
     constexpr int kMaximumDisplayTitleLength = 64;
+
+    cadcam::machine::RotaryMachinePolicy rotaryEndCutPreviewMachinePolicy
+    (
+        const GProfile& profile,
+        const std::optional<cadcam::machining::TubeSectionModel>& section
+    )
+    {
+        const GProfileRotaryAxisConfig& rotary = profile.rotaryAxisConfig();
+        cadcam::machine::RotaryMachinePolicy policy;
+        policy.rotaryAxisY = rotary.centerY;
+        policy.rotaryAxisZ = rotary.centerZ;
+        policy.invertAAxisDirection = rotary.invertAAxisDirection;
+        policy.aAxisOffsetDegrees = rotary.aAxisOffsetDegrees;
+        policy.keepContinuousAngle = rotary.keepContinuousAngle;
+        policy.machiningPlaneZOffset = rotary.machiningPlaneZOffset;
+        policy.surfaceClassificationTolerance =
+            std::max(policy.numericalEpsilon, 1.0e-6);
+
+        if (!section.has_value() || section->geometry.boundary.empty())
+        {
+            return policy;
+        }
+
+        policy.tubeCenterY = section->geometry.centerY;
+        policy.tubeCenterZ = section->geometry.centerZ;
+        const double maximumDimension = std::max
+            (section->geometry.yLength, section->geometry.zWidth);
+        policy.surfaceClassificationTolerance = std::max
+            (policy.surfaceClassificationTolerance, maximumDimension * 1.0e-8);
+        return policy;
+    }
 
     bool validDisplayTitle(const QString& value)
     {
@@ -1846,6 +1878,39 @@ void Gcode_postprocessing_system::initializeMachiningSettingsDock()
             statusBar()->showMessage(message, 5000);
         }
     );
+    connect
+    (
+        m_machiningSettingsWidget,
+        &MachiningSettingsWidget::rotaryMachiningDepthChanged,
+        this,
+        [this](double machiningDepth)
+        {
+            if (!std::isfinite(machiningDepth) || machiningDepth < 0.0)
+            {
+                m_machiningSettingsWidget->setRotaryMachiningDepth
+                    (m_rotaryMachiningDepth);
+                return;
+            }
+
+            m_rotaryMachiningDepth = machiningDepth;
+            const std::optional<cadcam::machining::TubeSectionModel> section =
+                m_rotaryTubeSectionModel.valid
+                ? m_rotaryTubeSectionModel.coreModel : std::nullopt;
+            ui->openGLWidget->setRotaryEndCutLaserEndpointPreview
+            (
+                section,
+                m_rotaryMachiningDepth,
+                rotaryEndCutPreviewMachinePolicy(m_activeProfile, section)
+            );
+
+            const QString message = machiningDepth > 0.0
+                ? QStringLiteral("加工深度已设置为 %1 mm；画布显示激光末端走线，该参数当前仅用于显示。")
+                    .arg(machiningDepth, 0, 'f', 3)
+                : QStringLiteral("已关闭激光末端走线显示。");
+            ui->openGLWidget->appendCommandMessage(message);
+            statusBar()->showMessage(message, 4000);
+        }
+    );
 
     syncMachiningSettingsState();
 }
@@ -2241,6 +2306,17 @@ void Gcode_postprocessing_system::syncMachiningSettingsState()
         m_rotaryTubeSectionModel.manuallyConfigured,
         m_rotaryTubeSectionModel.centerY,
         m_rotaryTubeSectionModel.centerZ
+    );
+    m_machiningSettingsWidget->setRotaryMachiningDepth
+        (m_rotaryMachiningDepth);
+    const std::optional<cadcam::machining::TubeSectionModel> section =
+        m_rotaryTubeSectionModel.valid
+        ? m_rotaryTubeSectionModel.coreModel : std::nullopt;
+    ui->openGLWidget->setRotaryEndCutLaserEndpointPreview
+    (
+        section,
+        m_rotaryMachiningDepth,
+        rotaryEndCutPreviewMachinePolicy(m_activeProfile, section)
     );
 
     QSet<int> rotaryEndCutIds;

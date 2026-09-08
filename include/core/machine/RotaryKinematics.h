@@ -18,9 +18,21 @@ namespace cadcam::machine
         RotarySurfaceSummary surface;
     };
 
+    struct SourceToolRay
+    {
+        geometry::Vector3d origin;
+        geometry::Vector3d unitDirection;
+    };
+
     class RotaryKinematics
     {
     public:
+        static std::optional<SourceToolRay> sourceToolRay
+        (
+            const MachinePose4D& toolPose,
+            const RotaryMachinePolicy& policy
+        );
+
         static geometry::Vector3d sourceLocalClearancePose
         (
             const geometry::Vector3d& cutEnd,

@@ -36,6 +36,8 @@
 #include "cad/view/interaction/CadController.h"
 #include "application/process/DocumentProcessState.h"
 #include "application/process/ProcessPresentationSnapshot.h"
+#include "core/machine/RotaryKinematics.h"
+#include "core/machining/TubeSection.h"
 
 /// 前向声明
 // 图元类
@@ -121,6 +123,12 @@ public:
     void setProcessDirectionVisible(bool visible);
     void setProcessOrderVisible(bool visible);
     void setRotaryEndCutsVisible(bool visible);
+    void setRotaryEndCutLaserEndpointPreview
+    (
+        const std::optional<cadcam::machining::TubeSectionModel>& section,
+        double machiningDepth,
+        const cadcam::machine::RotaryMachinePolicy& machinePolicy
+    );
     void setExcludedEntitiesDimmed(bool dimmed);
     bool excludedEntitiesDimmed() const { return m_excludedEntitiesDimmed; }
     void setBackgroundGridVisible(bool visible);
@@ -533,6 +541,9 @@ private:
     // 构建用户指定的方管中断切面和废面网格提示。
     std::vector<TransientPrimitive> buildRotaryEndCutPrimitives() const;
 
+    // 根据当前截面和加工断面状态重建高精度激光末端走线。
+    void rebuildRotaryEndCutLaserEndpointPreviewPaths();
+
     // 构建选中图元的基点/控制点图元
     // @return 选中态手柄 overlay 图元列表
     std::vector<TransientPrimitive> buildSelectedEntityHandlePrimitives() const;
@@ -666,6 +677,10 @@ private:
     bool m_processDirectionVisible = true;
     bool m_processOrderVisible = true;
     bool m_rotaryEndCutsVisible = true;
+    std::optional<cadcam::machining::TubeSectionModel> m_rotaryEndCutPreviewSection;
+    double m_rotaryMachiningDepth = 0.0;
+    cadcam::machine::RotaryMachinePolicy m_rotaryEndCutPreviewMachinePolicy;
+    std::vector<QVector<QVector3D>> m_rotaryEndCutLaserEndpointPreviewPaths;
     bool m_excludedEntitiesDimmed = true;
     bool m_backgroundGridVisible = true;
 
