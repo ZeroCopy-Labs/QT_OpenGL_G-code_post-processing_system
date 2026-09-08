@@ -569,6 +569,8 @@ bool Gcode_postprocessing_system::exportGCode
         m_currentProcessPlan.has_value() ? &*m_currentProcessPlan : nullptr
     );
     generator.setTubeSectionModel(m_rotaryTubeSectionModel.coreModel);
+    generator.setCutSurfaceCorrection(rotaryTubeWallThickness(),
+        m_cutSurfacePositiveCorrection, m_cutSurfaceNegativeCorrection);
     generator.setRotaryTubeCenter
     (
         m_rotaryTubeSectionModel.centerY,

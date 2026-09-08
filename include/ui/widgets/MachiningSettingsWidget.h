@@ -43,6 +43,8 @@ signals:
     void rotaryTubeWallThicknessChanged(double wallThickness);
     void rotaryLaserWallImpactVisibleChanged(bool visible);
     void rotaryExpectedSurfaceVisibleChanged(bool visible);
+    void cutSurfacePositiveCorrectionChanged(bool enabled);
+    void cutSurfaceNegativeCorrectionChanged(bool enabled);
 
 private:
     void updateAutomaticOptionDependencies();

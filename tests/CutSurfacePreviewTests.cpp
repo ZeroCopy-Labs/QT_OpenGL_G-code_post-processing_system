@@ -323,9 +323,61 @@ namespace
             "non-finite endpoint accepted");
     }
 
+    void correctionTests()
+    {
+        machine::RotaryMachinePolicy policy;
+        policy.machiningPlaneZOffset = 1.25;
+        for (double thickness : { 2.0, 4.0, 6.0 })
+        {
+            const auto data = fixture(4.0, 0.7, -0.4, true);
+            const auto laser = endpoints(data, thickness, policy);
+            const auto expected = machining::CutSurfaceExpectation::build(data.section, data.paths, laser);
+            for (bool positive : { false, true })
+            for (bool negative : { false, true })
+            {
+                const auto corrected = machining::CutSurfaceExpectation::correctPaths
+                    (data.section, data.paths, policy, thickness, positive, negative);
+                require(corrected.errorMessage.isEmpty(), "correction failed");
+                Fixture moved = data;
+                moved.paths = corrected.paths;
+                const auto impact = endpoints(moved, thickness, policy);
+                for (std::size_t p = 0; p < data.paths.size(); ++p)
+                for (std::size_t i = 0; i < data.paths[p].vertices.size(); ++i)
+                {
+                    const auto& source = data.paths[p].vertices[i].position;
+                    const auto& actual = corrected.paths[p].vertices[i].position;
+                    const double delta = expected.paths[p].vertices[i].position.x - laser[p].vertices[i].position.x;
+                    const bool enabled = (positive && delta > 0.0) || (negative && delta < 0.0);
+                    near(actual.x, source.x + (enabled ? delta : 0.0));
+                    near(actual.y, source.y);
+                    near(actual.z, source.z);
+                    near(impact[p].vertices[i].position.x,
+                        enabled ? expected.paths[p].vertices[i].position.x : laser[p].vertices[i].position.x);
+                }
+            }
+            require(!machining::CutSurfaceExpectation::correctPaths
+                (data.section, data.paths, policy, 30.0, true, false).errorMessage.isEmpty(),
+                "invalid thickness accepted for correction");
+        }
+    }
+
     void widgetTests()
     {
         MachiningSettingsWidget widget;
+        auto* positive = widget.findChild<QCheckBox*>(QStringLiteral("cutSurfacePositiveCorrection"));
+        auto* negative = widget.findChild<QCheckBox*>(QStringLiteral("cutSurfaceNegativeCorrection"));
+        require(positive && negative && !positive->isChecked() && !negative->isChecked(), "correction defaults");
+        bool positiveState = false, negativeState = false;
+        QObject::connect(&widget, &MachiningSettingsWidget::cutSurfacePositiveCorrectionChanged,
+            [&](bool value) { positiveState = value; });
+        QObject::connect(&widget, &MachiningSettingsWidget::cutSurfaceNegativeCorrectionChanged,
+            [&](bool value) { negativeState = value; });
+        positive->setChecked(true);
+        require(positiveState && !negativeState, "positive correction wiring");
+        negative->setChecked(true);
+        require(positiveState && negativeState, "independent correction switches");
+        positive->setChecked(false);
+        require(!positiveState && negativeState, "negative correction wiring");
         auto* thickness = widget.findChild<QDoubleSpinBox*>(QStringLiteral("tubeWallThickness"));
         require(thickness != nullptr, "tube wall thickness setting missing");
         int thicknessChanges = 0;
@@ -375,6 +427,7 @@ int main(int argc, char** argv)
     {
         geometryTests();
         widgetTests();
+        correctionTests();
         std::cout << "PASS: 108 inner-surface/thickness/radius/offset/curve/axis combinations, path reversal, closed paths, errors and display switches.\n";
         return 0;
     }

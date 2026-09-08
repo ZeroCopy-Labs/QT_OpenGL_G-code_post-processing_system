@@ -1792,6 +1792,10 @@ void Gcode_postprocessing_system::initializeMachiningSettingsDock()
     m_machiningSettingsDock->resize(310, height());
 
     m_machiningSettingsWidget = new MachiningSettingsWidget(m_machiningSettingsDock);
+    connect(m_machiningSettingsWidget, &MachiningSettingsWidget::cutSurfacePositiveCorrectionChanged,
+        this, [this](bool enabled) { m_cutSurfacePositiveCorrection = enabled; });
+    connect(m_machiningSettingsWidget, &MachiningSettingsWidget::cutSurfaceNegativeCorrectionChanged,
+        this, [this](bool enabled) { m_cutSurfaceNegativeCorrection = enabled; });
     m_machiningSettingsDock->setWidget(m_machiningSettingsWidget);
     addDockWidget(Qt::RightDockWidgetArea, m_machiningSettingsDock);
 

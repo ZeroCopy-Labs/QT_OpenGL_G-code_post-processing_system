@@ -261,6 +261,8 @@ private:
     AppLicense m_license;
     RotaryTubeSectionModel m_rotaryTubeSectionModel;
     std::optional<double> m_rotaryTubeWallThicknessOverride;
+    bool m_cutSurfacePositiveCorrection = false;
+    bool m_cutSurfaceNegativeCorrection = false;
     GProfile m_activeProfile = GProfile::createDefaultLaserProfile();
     cadcam::process::DocumentProcessState m_processState;
     std::optional<cadcam::planning::ProcessPlan> m_currentProcessPlan;

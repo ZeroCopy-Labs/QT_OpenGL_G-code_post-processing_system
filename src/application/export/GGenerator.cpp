@@ -216,8 +216,11 @@ OperationResult<QString> GGenerator::buildRotaryProgramText(const OperationConte
     std::optional<cadcam::geometry::Vector2d> explicitCenter;
     if (m_rotaryTubeCenterValid)
         explicitCenter = cadcam::geometry::Vector2d{ m_rotaryTubeCenterY, m_rotaryTubeCenterZ };
-    const MachiningProcessConfig processConfig =
+    MachiningProcessConfig processConfig =
         MachiningProcessConfig::fromProfile(*m_profile);
+    processConfig.tubeWallThickness = m_tubeWallThickness;
+    processConfig.cutSurfacePositiveCorrection = m_cutSurfacePositiveCorrection;
+    processConfig.cutSurfaceNegativeCorrection = m_cutSurfaceNegativeCorrection;
     NcProgramService service;
     auto program = service.buildRotaryProgram
     (

@@ -8,6 +8,51 @@
 
 namespace cadcam::machining
 {
+    CutSurfaceExpectationResult CutSurfaceExpectation::correctPaths
+    (
+        const TubeSectionModel& section,
+        const std::vector<geometry::Path3D>& sourcePaths,
+        const machine::RotaryMachinePolicy& policy,
+        double wallThickness,
+        bool positive,
+        bool negative
+    )
+    {
+        if (!positive && !negative) return { sourcePaths, {}, {} };
+        auto impacts = sourcePaths;
+        for (auto& path : impacts)
+        {
+            const auto solved = machine::RotaryKinematics::transform
+                (path, policy, section, std::nullopt, {});
+            if (!solved.succeeded() || !solved.value.has_value()
+                || solved.value->poses.size() != path.vertices.size())
+                return { {}, {}, QStringLiteral("加工断面修正：无法解算刀头姿态。") };
+            for (std::size_t i = 0; i < path.vertices.size(); ++i)
+            {
+                const auto ray = machine::RotaryKinematics::sourceToolRay(solved.value->poses[i], policy);
+                if (!ray.has_value())
+                    return { {}, {}, QStringLiteral("加工断面修正：刀头方向无效。") };
+                const auto inner = TubeSectionProjector::projectToInnerSurface(section, wallThickness,
+                    { ray->origin.y + ray->unitDirection.y * wallThickness,
+                      ray->origin.z + ray->unitDirection.z * wallThickness });
+                if (!inner.has_value())
+                    return { {}, {}, QStringLiteral("加工断面修正：方管厚度或内截面无效。") };
+                path.vertices[i].position = { ray->origin.x, inner->x, inner->y };
+            }
+        }
+        auto expected = build(section, sourcePaths, impacts);
+        if (!expected.errorMessage.isEmpty()) return expected;
+        for (std::size_t p = 0; p < sourcePaths.size(); ++p)
+        for (std::size_t i = 0; i < sourcePaths[p].vertices.size(); ++i)
+        {
+            const double delta = expected.paths[p].vertices[i].position.x - impacts[p].vertices[i].position.x;
+            auto& point = expected.paths[p].vertices[i].position;
+            point = sourcePaths[p].vertices[i].position;
+            if ((positive && delta > 0.0) || (negative && delta < 0.0)) point.x += delta;
+        }
+        return expected;
+    }
+
     namespace
     {
         using geometry::Vector3d;

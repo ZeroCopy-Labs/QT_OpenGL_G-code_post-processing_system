@@ -36,6 +36,12 @@ public:
     void setRotaryTubeCenter(double centerY, double centerZ, bool valid);
     void setProcessPlan(const cadcam::planning::ProcessPlan* processPlan);
     void setProcessState(const cadcam::process::DocumentProcessState* processState);
+    void setCutSurfaceCorrection(double wallThickness, bool positive, bool negative)
+    {
+        m_tubeWallThickness = wallThickness;
+        m_cutSurfacePositiveCorrection = positive;
+        m_cutSurfaceNegativeCorrection = negative;
+    }
     void setTubeSectionModel
     (
         const std::optional<cadcam::machining::TubeSectionModel>& tubeSectionModel
@@ -60,6 +66,9 @@ private:
     GProfile* m_profile = nullptr;
     GenerationMode m_generationMode = GenerationMode::Mode2D;
     double m_rotaryTubeCenterY = 0.0;
+    double m_tubeWallThickness = 0.0;
+    bool m_cutSurfacePositiveCorrection = false;
+    bool m_cutSurfaceNegativeCorrection = false;
     double m_rotaryTubeCenterZ = 0.0;
     bool m_rotaryTubeCenterValid = false;
     const cadcam::planning::ProcessPlan* m_processPlan = nullptr;

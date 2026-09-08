@@ -6,6 +6,7 @@
 #include "core/machine/ProcessUnitExecutionResolver.h"
 #include "core/machine/RotaryTrajectoryBuilder.h"
 #include "core/machining/TubeSectionProjector.h"
+#include "core/machining/CutSurfaceExpectation.h"
 #include "drw_entities.h"
 
 #include <QDebug>
@@ -521,6 +522,44 @@ OperationResult<cadcam::machine::MachineTrajectory> MachineTrajectoryService::bu
             .arg(policy.transfer.sameZoneTransferClearance, 0, 'g', 15)
             .arg(policy.transfer.coordinatedTransferEnabled
                 ? QStringLiteral("true") : QStringLiteral("false")));
+    if (processConfig.cutSurfacePositiveCorrection || processConfig.cutSurfaceNegativeCorrection)
+    {
+        std::map<int, std::vector<std::size_t>> boundaries;
+        for (std::size_t i = 0; i < input.entities.size(); ++i)
+        {
+            const auto state = processState.stateOrDefault(input.entities[i].entityId);
+            if (state.overrideData.boundaryRole == planning::BoundaryRole::Break)
+                boundaries[state.overrideData.boundaryPairId].push_back(i);
+        }
+        for (const auto& boundary : boundaries)
+        {
+            if (!tubeSection.has_value() || boundary.first < 0)
+            {
+                result.status = OperationStatus::InvalidInput;
+                result.addDiagnostic(serviceDiagnostic(DiagnosticCode::MachineTrajectoryInputInvalid,
+                    QStringLiteral("加工断面修正需要有效的方管截面和断面标记。"), taskContext.operationContext));
+                return result;
+            }
+            std::vector<geometry::Path3D> sources;
+            for (const auto index : boundary.second) sources.push_back(input.entities[index].path);
+            auto corrected = machining::CutSurfaceExpectation::correctPaths
+                (*tubeSection, sources, policy, processConfig.tubeWallThickness,
+                    processConfig.cutSurfacePositiveCorrection, processConfig.cutSurfaceNegativeCorrection);
+            if (!corrected.errorMessage.isEmpty())
+            {
+                result.status = OperationStatus::Failed;
+                result.addDiagnostic(serviceDiagnostic(DiagnosticCode::MachineTrajectoryInvalidPath,
+                    QStringLiteral("加工断面 %1：%2").arg(boundary.first).arg(corrected.errorMessage),
+                    taskContext.operationContext, input.entities[boundary.second.front()].entityId));
+                return result;
+            }
+            for (std::size_t i = 0; i < boundary.second.size(); ++i)
+                input.entities[boundary.second[i]].path = std::move(corrected.paths[i]);
+        }
+        // 修正改变切入/切出位置，原规划的空移签名不再适用。
+        if (!boundaries.empty())
+            for (auto& entity : input.entities) entity.plannedIncomingTransfer.reset();
+    }
     auto built = machine::RotaryTrajectoryBuilder::build(input, policy, taskContext);
     result.mergeDiagnostics(built);
     result.status = built.status;

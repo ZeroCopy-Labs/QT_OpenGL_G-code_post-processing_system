@@ -27,6 +27,10 @@ struct MachiningProcessConfig
     // 加工工艺
     double machiningPlaneZOffset = 0.0;
     double overcutDistance = 2.0;
+    // 当前文档的导出工艺，不写入设备配置。
+    double tubeWallThickness = 0.0;
+    bool cutSurfacePositiveCorrection = false;
+    bool cutSurfaceNegativeCorrection = false;
 
     // 单元成员连续连接容差：必须与规划使用的连接容差一致。
     double continuousConnectionTolerance = 1.0;

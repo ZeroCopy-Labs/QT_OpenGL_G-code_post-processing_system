@@ -92,7 +92,7 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     m_wallThicknessInput->setSingleStep(0.1);
     m_wallThicknessInput->setSpecialValueText(QStringLiteral("未设置"));
     m_wallThicknessInput->setToolTip(QStringLiteral(
-        "默认取圆角半径，手动修改后保留；输入 0 可恢复默认值。内截面尺寸为外尺寸减去两倍壁厚，内圆角半径不小于 0；厚度须小于 Y 长、Z 宽的一半。两条线都投影到这个内轮廓，仅用于显示。"));
+        "默认取圆角半径，手动修改后保留；输入 0 可恢复默认值。内截面尺寸为外尺寸减去两倍壁厚，内圆角半径不小于 0；厚度须小于 Y 长、Z 宽的一半。用于两条内壁参考走线及导出时的加工断面修正。"));
     m_laserWallImpactVisibleCheckBox = new QCheckBox(QStringLiteral("激光内壁作用线（绿色）"), statusGroup);
     m_laserWallImpactVisibleCheckBox->setObjectName(QStringLiteral("laserWallImpactVisible"));
     m_laserWallImpactVisibleCheckBox->setChecked(true);
@@ -117,6 +117,18 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     statusLayout->addRow(QStringLiteral("Z 宽："), m_zWidthInput);
     statusLayout->addRow(QStringLiteral("圆角半径："), m_cornerRadiusInput);
     statusLayout->addRow(QStringLiteral("方管厚度："), m_wallThicknessInput);
+    auto* positiveCorrection = new QCheckBox(QStringLiteral("加工断面正向修正（+X）"), statusGroup);
+    positiveCorrection->setObjectName(QStringLiteral("cutSurfacePositiveCorrection"));
+    positiveCorrection->setToolTip(QStringLiteral("生成四轴 G 代码时，仅当期望点 X 大于内壁作用点 X，沿 +X 补足差值。默认关闭。"));
+    auto* negativeCorrection = new QCheckBox(QStringLiteral("加工断面反向修正（−X）"), statusGroup);
+    negativeCorrection->setObjectName(QStringLiteral("cutSurfaceNegativeCorrection"));
+    negativeCorrection->setToolTip(QStringLiteral("生成四轴 G 代码时，仅当期望点 X 小于内壁作用点 X，沿 −X 补足差值。可与正向同时开启；显示开关不影响此工艺。"));
+    statusLayout->addRow(QString(), positiveCorrection);
+    statusLayout->addRow(QString(), negativeCorrection);
+    connect(positiveCorrection, &QCheckBox::toggled,
+        this, &MachiningSettingsWidget::cutSurfacePositiveCorrectionChanged);
+    connect(negativeCorrection, &QCheckBox::toggled,
+        this, &MachiningSettingsWidget::cutSurfaceNegativeCorrectionChanged);
     statusLayout->addRow(QString(), m_laserWallImpactVisibleCheckBox);
     statusLayout->addRow(QString(), m_expectedSurfaceVisibleCheckBox);
     statusLayout->addRow(QStringLiteral("走线状态："), m_endCutPreviewStatusValue);

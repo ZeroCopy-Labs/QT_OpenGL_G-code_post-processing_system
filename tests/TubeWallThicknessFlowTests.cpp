@@ -9,6 +9,7 @@
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
+#include "CutSurfaceCorrectionFlowTests.h"
 
 int main(int argc, char** argv)
 {
@@ -21,6 +22,7 @@ int main(int argc, char** argv)
     QSettings::setPath(QSettings::IniFormat, QSettings::SystemScope, settingsDirectory.path());
     try
     {
+        cutSurfaceCorrectionFlowTests();
         Gcode_postprocessing_system window;
         auto* settings = window.findChild<MachiningSettingsWidget*>();
         auto* thickness = window.findChild<QDoubleSpinBox*>(QStringLiteral("tubeWallThickness"));
