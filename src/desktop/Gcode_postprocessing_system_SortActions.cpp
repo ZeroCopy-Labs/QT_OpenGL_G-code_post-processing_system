@@ -3865,7 +3865,7 @@ int Gcode_postprocessing_system::refreshWasteProcessingExclusions
     struct BoundaryPosition
     {
         cadcam::planning::BoundaryRole role = cadcam::planning::BoundaryRole::None;
-        double centerX = 0.0;
+        double minimumX = std::numeric_limits<double>::max();
         RotaryCutBoundaryAnalysis analysis;
     };
 
@@ -3893,98 +3893,21 @@ int Gcode_postprocessing_system::refreshWasteProcessingExclusions
 
         for (const QVector3D& point : boundary.analysis.orderedPath)
         {
-            boundary.centerX += point.x();
+            boundary.minimumX = std::min(boundary.minimumX, static_cast<double>(point.x()));
         }
 
-        boundary.centerX /= static_cast<double>(boundary.analysis.orderedPath.size());
         boundaries.push_back(std::move(boundary));
     }
 
-    bool boundariesHaveStableOrder = true;
     {
         BoundaryPerformanceTimer orderingTimer
             (m_boundaryAssignmentPerformanceReport != nullptr
                 ? &m_boundaryAssignmentPerformanceReport->boundaryOrderingMs : nullptr);
-        std::sort
-        (
-            boundaries.begin(),
-            boundaries.end(),
+        std::stable_sort(boundaries.begin(), boundaries.end(),
             [](const BoundaryPosition& left, const BoundaryPosition& right)
             {
-                return left.centerX < right.centerX;
-            }
-        );
-
-        for (size_t boundaryIndex = 1;
-            boundaryIndex < boundaries.size() && boundariesHaveStableOrder;
-            ++boundaryIndex)
-        {
-            const BoundaryPosition& leftBoundary = boundaries[boundaryIndex - 1];
-            const BoundaryPosition& rightBoundary = boundaries[boundaryIndex];
-
-            if (RotaryCutBoundaryAnalyzer::boundariesIntersect
-            (
-                leftBoundary.analysis,
-                rightBoundary.analysis,
-                kEndCutConnectionTolerance
-            ))
-            {
-                boundariesHaveStableOrder = false;
-                break;
-            }
-
-            {
-                BoundaryPerformanceTimer classificationTimer
-                    (m_boundaryAssignmentPerformanceReport != nullptr
-                        ? &m_boundaryAssignmentPerformanceReport->pointClassificationMs
-                        : nullptr);
-                for (const QVector3D& point : rightBoundary.analysis.orderedPath)
-                {
-                    if (m_boundaryAssignmentPerformanceReport != nullptr)
-                    {
-                        ++m_boundaryAssignmentPerformanceReport->classificationCallCount;
-                        ++m_boundaryAssignmentPerformanceReport->samplePointCount;
-                    }
-                    const RotaryBoundarySide side =
-                        RotaryCutBoundaryAnalyzer::classifyPointRelativeToBoundary
-                        (leftBoundary.analysis, point, kEndCutConnectionTolerance);
-                    if (side != RotaryBoundarySide::After
-                        && side != RotaryBoundarySide::OnBoundary)
-                    {
-                        boundariesHaveStableOrder = false;
-                        break;
-                    }
-                }
-
-                for (const QVector3D& point : leftBoundary.analysis.orderedPath)
-                {
-                    if (m_boundaryAssignmentPerformanceReport != nullptr)
-                    {
-                        ++m_boundaryAssignmentPerformanceReport->classificationCallCount;
-                        ++m_boundaryAssignmentPerformanceReport->samplePointCount;
-                    }
-                    const RotaryBoundarySide side =
-                        RotaryCutBoundaryAnalyzer::classifyPointRelativeToBoundary
-                        (rightBoundary.analysis, point, kEndCutConnectionTolerance);
-                    if (side != RotaryBoundarySide::Before
-                        && side != RotaryBoundarySide::OnBoundary)
-                    {
-                        boundariesHaveStableOrder = false;
-                        break;
-                    }
-                }
-            }
-
-            if (!boundariesHaveStableOrder)
-            {
-                break;
-            }
-        }
-    }
-
-    if (!boundariesHaveStableOrder)
-    {
-        boundaries.clear();
+                return left.minimumX < right.minimumX;
+            });
     }
 
     int excludedCount = 0;

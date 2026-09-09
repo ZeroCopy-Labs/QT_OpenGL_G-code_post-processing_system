@@ -23,6 +23,7 @@ int main(int argc, char** argv)
     try
     {
         cutSurfaceCorrectionFlowTests();
+        boundaryMinimumXOrderTests();
         Gcode_postprocessing_system window;
         auto* settings = window.findChild<MachiningSettingsWidget*>();
         auto* thickness = window.findChild<QDoubleSpinBox*>(QStringLiteral("tubeWallThickness"));

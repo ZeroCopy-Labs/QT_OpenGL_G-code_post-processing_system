@@ -2,6 +2,7 @@
 
 #include "application/export/GGenerator.h"
 #include "application/machine/MachineTrajectoryService.h"
+#include "application/planning/ProcessPlanningService.h"
 #include "cad/document/CadDocument.h"
 #include "cad/items/CadItem.h"
 #include "core/machining/TubeSectionProjector.h"
@@ -10,6 +11,83 @@
 #include <array>
 #include <cmath>
 #include <stdexcept>
+
+inline void boundaryMinimumXOrderTests()
+{
+    using namespace cadcam;
+    // 先放右断面，再放倾斜更大的左断面；二者的 X 范围重叠且实际相交。
+    for (double secondCenter : { 100.0, 142.0 })
+    {
+        CadDocument document;
+        process::DocumentProcessState state;
+        machining::TubeSectionModel section;
+        section.geometry.yLength = 80.0;
+        section.geometry.zWidth = 60.0;
+        section.cornerRadius = 4.0;
+        section.roundedCornerCount = 4;
+        std::array<std::vector<geometry::EntityId>, 2> ids;
+        for (int boundary = 0; boundary < 2; ++boundary)
+        {
+            std::vector<geometry::Vector3d> points;
+            const int ys[] = { 1, 1, -1, -1 }, zs[] = { 1, -1, -1, 1 };
+            for (int c = 0; c < 4; ++c)
+            {
+                const geometry::Vector2d center{ ys[c] * 36.0, zs[c] * 26.0 };
+                if (boundary == 0) section.corners.push_back({ center, 4.0, ys[c], zs[c] });
+                for (int i = 0; i <= 16; ++i)
+                {
+                    const double angle = 1.5707963267948966 * (1 - c - i / 16.0);
+                    const double y = center.x + 4 * std::cos(angle), z = center.y + 4 * std::sin(angle);
+                    points.push_back({ (boundary == 0 ? 110.0 + 0.2 * y : secondCenter + y), y, z });
+                    if (boundary == 0) section.geometry.boundary.push_back({ y, z });
+                }
+            }
+            for (std::size_t i = 0; i < points.size(); ++i)
+            {
+                auto line = std::make_unique<DRW_Line>();
+                const auto& a = points[i];
+                const auto& b = points[(i + 1) % points.size()];
+                line->basePoint = DRW_Coord(a.x, a.y, a.z);
+                line->secPoint = DRW_Coord(b.x, b.y, b.z);
+                const auto id = document.appendEntity(std::move(line))->m_entityId;
+                ids[boundary].push_back(id);
+                state.setBoundary(id, planning::BoundaryRole::Break, boundary);
+            }
+        }
+        section.contentRevision = document.contentRevision();
+        planning::ProcessPlanningPolicy policy;
+        policy.connectionTolerance = 0.001;
+        auto result = ProcessPlanningService().buildRotaryPlan(document, state, section, policy, {});
+        if (!result.succeeded() || !result.value.has_value())
+        {
+            for (const auto& diagnostic : result.diagnostics)
+                std::cerr << diagnostic.userMessage.toStdString() << '\n';
+            throw std::runtime_error("minimum-X boundary planning failed");
+        }
+        const int first = secondCenter == 100.0 ? 1 : 0;
+        for (std::size_t i = 0; i < result.value->assignments.size(); ++i)
+        {
+            const auto id = result.value->assignments[i].entityId;
+            const auto& expected = ids[i < ids[first].size() ? first : 1 - first];
+            if (std::find(expected.begin(), expected.end(), id) == expected.end())
+                throw std::runtime_error("boundary minimum-X order or stable tie failed");
+        }
+        GGenerator generator;
+        generator.setDocument(&document);
+        generator.setGenerationMode(GGenerator::GenerationMode::Mode3D);
+        generator.setProcessState(&state);
+        generator.setProcessPlan(&*result.value);
+        generator.setTubeSectionModel(section);
+        const auto program = generator.buildProgramText({});
+        if (!program.succeeded() || !program.value.has_value() || program.value->isEmpty())
+        {
+            for (const auto& diagnostic : program.diagnostics)
+                std::cerr << diagnostic.userMessage.toStdString() << '\n';
+            throw std::runtime_error("minimum-X sorted plan could not export G-code");
+        }
+    }
+    std::cout << "PASS: crossing boundaries sorted by minimum X, stable equal minima and G-code export.\n";
+}
 
 inline void cutSurfaceCorrectionFlowTests()
 {

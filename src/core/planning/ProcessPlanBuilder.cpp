@@ -618,94 +618,22 @@ namespace cadcam::planning
             }
         }
 
-        std::vector<std::vector<int>> boundarySuccessors(boundaries.size());
-        std::vector<int> boundaryIndegree(boundaries.size(), 0);
-        for (std::size_t leftIndex = 0; leftIndex < boundaries.size(); ++leftIndex)
-        {
-            for (std::size_t rightIndex = leftIndex + 1U;
-                rightIndex < boundaries.size(); ++rightIndex)
-            {
-                const BoundaryData& leftBoundary = boundaries[leftIndex];
-                const BoundaryData& rightBoundary = boundaries[rightIndex];
-                const ProcessGroup& leftGroup = plan.groups
-                    [static_cast<std::size_t>(leftBoundary.groupId)];
-                const ProcessGroup& rightGroup = plan.groups
-                    [static_cast<std::size_t>(rightBoundary.groupId)];
-                const BoundarySide leftRelativeToRight = classifyGroup
-                (
-                    leftGroup, entities, rightBoundary,
-                    *planningSection, policy.connectionTolerance
-                );
-                const BoundarySide rightRelativeToLeft = classifyGroup
-                (
-                    rightGroup, entities, leftBoundary,
-                    *planningSection, policy.connectionTolerance
-                );
-                const bool leftBeforeRight = leftRelativeToRight == BoundarySide::Left
-                    && rightRelativeToLeft == BoundarySide::Right;
-                const bool rightBeforeLeft = leftRelativeToRight == BoundarySide::Right
-                    && rightRelativeToLeft == BoundarySide::Left;
-                if (!leftBeforeRight && !rightBeforeLeft)
-                {
-                    const bool crossing = leftRelativeToRight == BoundarySide::Mixed
-                        || rightRelativeToLeft == BoundarySide::Mixed;
-                    const bool overlapping = leftRelativeToRight == BoundarySide::OnBoundary
-                        || rightRelativeToLeft == BoundarySide::OnBoundary;
-                    return failure<ProcessPlan>
-                    (
-                        OperationStatus::Failed, context,
-                        DiagnosticCode::ProcessPlanningBoundaryClassificationFailed,
-                        crossing
-                            ? QStringLiteral("两个加工断面相互交叉，无法确定空间顺序。")
-                            : overlapping
-                                ? QStringLiteral("两个加工断面重合，无法建立独立工艺屏障。")
-                                : QStringLiteral("两个加工断面无法严格区分左右空间关系。"),
-                        QStringLiteral("Bidirectional boundary classification is not a strict Left/Right pair."),
-                        boundaryDiagnosticValues
-                        (
-                            input, policy, rightBoundary, leftGroup, entities, -1,
-                            leftRelativeToRight, rightRelativeToLeft
-                        )
-                    );
-                }
-
-                const std::size_t predecessor = leftBeforeRight ? leftIndex : rightIndex;
-                const std::size_t successor = leftBeforeRight ? rightIndex : leftIndex;
-                boundarySuccessors[predecessor].push_back(static_cast<int>(successor));
-                ++boundaryIndegree[successor];
-            }
-        }
-
+        // 断面加工顺序仅由最小 X 决定；相同最小值保留原有稳定顺序。
         std::vector<int> boundaryOrder;
         boundaryOrder.reserve(boundaries.size());
-        std::vector<bool> boundaryScheduled(boundaries.size(), false);
-        while (boundaryOrder.size() < boundaries.size())
+        std::vector<double> boundaryMinimumXs;
+        boundaryMinimumXs.reserve(boundaries.size());
+        for (std::size_t index = 0; index < boundaries.size(); ++index)
         {
-            std::vector<int> eligibleBoundaries;
-            for (std::size_t index = 0; index < boundaries.size(); ++index)
-                if (!boundaryScheduled[index] && boundaryIndegree[index] == 0)
-                    eligibleBoundaries.push_back(static_cast<int>(index));
-            if (eligibleBoundaries.size() != 1U)
-            {
-                return failure<ProcessPlan>
-                (
-                    OperationStatus::Failed, context,
-                    DiagnosticCode::ProcessPlanningBoundaryClassificationFailed,
-                    eligibleBoundaries.empty()
-                        ? QStringLiteral("多断面空间关系形成循环，无法生成加工计划。")
-                        : QStringLiteral("多个加工断面缺少唯一左右顺序，无法生成加工计划。"),
-                    QStringLiteral("Boundary spatial relation graph is cyclic or not uniquely ordered."),
-                    diagnosticValues(input, policy, 0U, 0U, -1, -1, -1, -1,
-                        static_cast<int>(boundaries.size()),
-                        static_cast<int>(eligibleBoundaries.size()))
-                );
-            }
-            const int selectedBoundary = eligibleBoundaries.front();
-            boundaryScheduled[static_cast<std::size_t>(selectedBoundary)] = true;
-            boundaryOrder.push_back(selectedBoundary);
-            for (const int successor : boundarySuccessors[static_cast<std::size_t>(selectedBoundary)])
-                --boundaryIndegree[static_cast<std::size_t>(successor)];
+            boundaryOrder.push_back(static_cast<int>(index));
+            boundaryMinimumXs.push_back(boundaryXBounds(boundaries[index]).minimum);
         }
+        std::stable_sort(boundaryOrder.begin(), boundaryOrder.end(),
+            [&boundaryMinimumXs](int left, int right)
+            {
+                return boundaryMinimumXs[static_cast<std::size_t>(left)]
+                    < boundaryMinimumXs[static_cast<std::size_t>(right)];
+            });
 
         std::unordered_map<int, int> boundaryRankByGroup;
         for (std::size_t rank = 0; rank < boundaryOrder.size(); ++rank)
@@ -776,7 +704,7 @@ namespace cadcam::planning
             groupBoundarySides.emplace(group.groupId, std::move(sides));
         }
 
-        // Waste intervals reuse the same strict spatial order as production barriers.
+        // Waste intervals reuse the minimum-X order of production barriers.
         if (boundaries.size() >= 2U)
         {
             for (const ProcessGroup& group : plan.groups)
