@@ -32,6 +32,7 @@ public:
     );
     void setRotaryEndCutCount(int count);
     void setRotaryTubeWallThickness(double wallThickness);
+    void setCutSurfaceCorrectionOptions(bool positiveEnabled, bool negativeEnabled);
     void setRotaryEndCutPreviewStatus(const QString& status);
 
 signals:
@@ -70,6 +71,8 @@ private:
     QDoubleSpinBox* m_wallThicknessInput = nullptr;
     QCheckBox* m_laserWallImpactVisibleCheckBox = nullptr;
     QCheckBox* m_expectedSurfaceVisibleCheckBox = nullptr;
+    QCheckBox* m_cutSurfacePositiveCorrectionCheckBox = nullptr;
+    QCheckBox* m_cutSurfaceNegativeCorrectionCheckBox = nullptr;
     QLabel* m_endCutPreviewStatusValue = nullptr;
     QPushButton* m_applyManualSectionButton = nullptr;
     QPushButton* m_applySectionCenterButton = nullptr;

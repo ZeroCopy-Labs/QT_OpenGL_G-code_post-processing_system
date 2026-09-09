@@ -317,22 +317,26 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     m_expectedSurfaceVisibleCheckBox->setChecked(true);
     m_expectedSurfaceVisibleCheckBox->setToolTip(QStringLiteral(
         "与绿色作用线投影到相同内轮廓，由圆角推断的局部断面方向求 X，直角处也补入转折点；曲线边保留自身形状。边两端方向不一致时报错。两条走线还受加工标记和加工断面标记总开关控制。"));
-    auto* positiveCorrection = new QCheckBox(QStringLiteral("加工断面正向修正（+X）"), stateGroup);
-    positiveCorrection->setObjectName(QStringLiteral("cutSurfacePositiveCorrection"));
-    positiveCorrection->setToolTip(QStringLiteral("生成四轴 G 代码时，仅当期望点 X 大于内壁作用点 X，沿 +X 补足差值。默认关闭。"));
-    auto* negativeCorrection = new QCheckBox(QStringLiteral("加工断面反向修正（−X）"), stateGroup);
-    negativeCorrection->setObjectName(QStringLiteral("cutSurfaceNegativeCorrection"));
-    negativeCorrection->setToolTip(QStringLiteral("生成四轴 G 代码时，仅当期望点 X 小于内壁作用点 X，沿 −X 补足差值。可与正向同时开启；显示开关不影响此工艺。"));
-    connect(positiveCorrection, &QCheckBox::toggled,
-        this, &MachiningSettingsWidget::cutSurfacePositiveCorrectionChanged);
-    connect(negativeCorrection, &QCheckBox::toggled,
-        this, &MachiningSettingsWidget::cutSurfaceNegativeCorrectionChanged);
+    m_cutSurfacePositiveCorrectionCheckBox = new QCheckBox(QStringLiteral("加工断面正向修正（+X）"), stateGroup);
+    m_cutSurfacePositiveCorrectionCheckBox->setObjectName(QStringLiteral("cutSurfacePositiveCorrection"));
+    m_cutSurfacePositiveCorrectionCheckBox->setToolTip(QStringLiteral("生成四轴 G 代码时，仅当期望点 X 大于内壁作用点 X，沿 +X 补足差值。默认关闭。"));
+    m_cutSurfaceNegativeCorrectionCheckBox = new QCheckBox(QStringLiteral("加工断面反向修正（−X）"), stateGroup);
+    m_cutSurfaceNegativeCorrectionCheckBox->setObjectName(QStringLiteral("cutSurfaceNegativeCorrection"));
+    m_cutSurfaceNegativeCorrectionCheckBox->setToolTip(QStringLiteral("生成四轴 G 代码时，仅当期望点 X 小于内壁作用点 X，沿 −X 补足差值。可与正向同时开启；显示开关不影响此工艺。"));
+    connect(m_cutSurfacePositiveCorrectionCheckBox, &QCheckBox::toggled, this, [this](bool checked)
+    {
+        if (!m_updatingUi) emit cutSurfacePositiveCorrectionChanged(checked);
+    });
+    connect(m_cutSurfaceNegativeCorrectionCheckBox, &QCheckBox::toggled, this, [this](bool checked)
+    {
+        if (!m_updatingUi) emit cutSurfaceNegativeCorrectionChanged(checked);
+    });
     stateLayout->addRow(QStringLiteral("截面状态："), m_sectionStatusValue);
     stateLayout->addRow(QStringLiteral("圆角数量："), m_roundedCornerCountValue);
     stateLayout->addRow(QStringLiteral("中心线位置："), m_centerLineValue);
     stateLayout->addRow(QStringLiteral("走线状态："), m_endCutPreviewStatusValue);
-    stateLayout->addRow(QString(), positiveCorrection);
-    stateLayout->addRow(QString(), negativeCorrection);
+    stateLayout->addRow(QString(), m_cutSurfacePositiveCorrectionCheckBox);
+    stateLayout->addRow(QString(), m_cutSurfaceNegativeCorrectionCheckBox);
     stateLayout->addRow(QString(), m_laserWallImpactVisibleCheckBox);
     stateLayout->addRow(QString(), m_expectedSurfaceVisibleCheckBox);
     stateLayout->addRow(QStringLiteral("加工断面："), m_rotaryEndCutCountValue);
@@ -528,6 +532,15 @@ void MachiningSettingsWidget::setRotaryTubeWallThickness(double wallThickness)
 {
     m_updatingUi = true;
     m_wallThicknessInput->setValue(std::max(0.0, wallThickness));
+    m_updatingUi = false;
+}
+
+void MachiningSettingsWidget::setCutSurfaceCorrectionOptions
+    (bool positiveEnabled, bool negativeEnabled)
+{
+    m_updatingUi = true;
+    m_cutSurfacePositiveCorrectionCheckBox->setChecked(positiveEnabled);
+    m_cutSurfaceNegativeCorrectionCheckBox->setChecked(negativeEnabled);
     m_updatingUi = false;
 }
 

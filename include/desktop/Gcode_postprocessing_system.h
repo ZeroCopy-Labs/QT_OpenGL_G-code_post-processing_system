@@ -122,6 +122,10 @@ private:
     void saveAutoRecognizeRotaryEndCutsOnImport(bool enabled) const;
     bool loadAutoRemoveInternalPathsOnImport() const;
     void saveAutoRemoveInternalPathsOnImport(bool enabled) const;
+    bool loadCutSurfacePositiveCorrection() const;
+    void saveCutSurfacePositiveCorrection(bool enabled) const;
+    bool loadCutSurfaceNegativeCorrection() const;
+    void saveCutSurfaceNegativeCorrection(bool enabled) const;
     bool loadUseDxfFileNameOnExport() const;
     void saveUseDxfFileNameOnExport(bool enabled) const;
     bool loadUseDefaultImportPath() const;

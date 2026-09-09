@@ -637,6 +637,8 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
     ui->action_Sort_3D_Smart->setVisible(false);
 
     m_generationPreference = loadGenerationPreference();
+    m_cutSurfacePositiveCorrection = loadCutSurfacePositiveCorrection();
+    m_cutSurfaceNegativeCorrection = loadCutSurfaceNegativeCorrection();
 
     if (m_generationPreference == GCodeGenerationPreference::Force3D && !m_license.allows(AppFeature::FourAxisExport))
     {
@@ -1660,6 +1662,30 @@ void Gcode_postprocessing_system::saveAutoDeduplicateOnImport(bool enabled) cons
     settings.setValue(QStringLiteral("dxf/autoDeduplicateOnImport"), enabled);
 }
 
+bool Gcode_postprocessing_system::loadCutSurfacePositiveCorrection() const
+{
+    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    return settings.value(QStringLiteral("gcode/cutSurfacePositiveCorrection"), false).toBool();
+}
+
+void Gcode_postprocessing_system::saveCutSurfacePositiveCorrection(bool enabled) const
+{
+    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    settings.setValue(QStringLiteral("gcode/cutSurfacePositiveCorrection"), enabled);
+}
+
+bool Gcode_postprocessing_system::loadCutSurfaceNegativeCorrection() const
+{
+    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    return settings.value(QStringLiteral("gcode/cutSurfaceNegativeCorrection"), false).toBool();
+}
+
+void Gcode_postprocessing_system::saveCutSurfaceNegativeCorrection(bool enabled) const
+{
+    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    settings.setValue(QStringLiteral("gcode/cutSurfaceNegativeCorrection"), enabled);
+}
+
 bool Gcode_postprocessing_system::loadAutoRecognizeRotaryTubeSectionOnImport() const
 {
     QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
@@ -1820,9 +1846,17 @@ void Gcode_postprocessing_system::initializeMachiningSettingsDock()
 
     m_machiningSettingsWidget = new MachiningSettingsWidget(m_machiningSettingsDock);
     connect(m_machiningSettingsWidget, &MachiningSettingsWidget::cutSurfacePositiveCorrectionChanged,
-        this, [this](bool enabled) { m_cutSurfacePositiveCorrection = enabled; });
+        this, [this](bool enabled)
+    {
+        m_cutSurfacePositiveCorrection = enabled;
+        saveCutSurfacePositiveCorrection(enabled);
+    });
     connect(m_machiningSettingsWidget, &MachiningSettingsWidget::cutSurfaceNegativeCorrectionChanged,
-        this, [this](bool enabled) { m_cutSurfaceNegativeCorrection = enabled; });
+        this, [this](bool enabled)
+    {
+        m_cutSurfaceNegativeCorrection = enabled;
+        saveCutSurfaceNegativeCorrection(enabled);
+    });
     m_machiningSettingsDock->setWidget(m_machiningSettingsWidget);
     addDockWidget(Qt::RightDockWidgetArea, m_machiningSettingsDock);
 
@@ -2420,6 +2454,11 @@ void Gcode_postprocessing_system::syncMachiningSettingsState()
     );
     m_machiningSettingsWidget->setRotaryTubeWallThickness
         (rotaryTubeWallThickness());
+    m_machiningSettingsWidget->setCutSurfaceCorrectionOptions
+    (
+        m_cutSurfacePositiveCorrection,
+        m_cutSurfaceNegativeCorrection
+    );
     const std::optional<cadcam::machining::TubeSectionModel> section =
         m_rotaryTubeSectionModel.valid
         ? m_rotaryTubeSectionModel.coreModel : std::nullopt;
