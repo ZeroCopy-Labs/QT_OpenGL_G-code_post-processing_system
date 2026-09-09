@@ -4179,6 +4179,7 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan3D
         m_activeProfile.toolTransferConfig().sameZoneTransferClearance;
     policy.coordinatedTransferEnabled =
         m_activeProfile.toolTransferConfig().coordinatedTransferEnabled;
+    policy.sameZone = m_activeProfile.toolTransferConfig().sameZone;
     policy.rotaryAxisY = m_activeProfile.rotaryAxisConfig().centerY;
     policy.rotaryAxisZ = m_activeProfile.rotaryAxisConfig().centerZ;
     policy.invertAAxisDirection =

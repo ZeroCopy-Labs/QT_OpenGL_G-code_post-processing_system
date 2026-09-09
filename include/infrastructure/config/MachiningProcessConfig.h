@@ -23,6 +23,7 @@ struct MachiningProcessConfig
     double rotationSafetyClearance = 5.0;
     double sameZoneTransferClearance = 0.0;
     bool coordinatedTransferEnabled = true;
+    cadcam::machine::SameZoneTransferParameters sameZone;
 
     // 加工工艺
     double machiningPlaneZOffset = 0.0;
@@ -62,6 +63,7 @@ struct MachiningProcessConfig
         config.rotationSafetyClearance = transfer.rotationSafetyClearance;
         config.sameZoneTransferClearance = transfer.sameZoneTransferClearance;
         config.coordinatedTransferEnabled = transfer.coordinatedTransferEnabled;
+        config.sameZone = transfer.sameZone;
         config.machiningPlaneZOffset = rotary.machiningPlaneZOffset;
         config.overcutDistance = rotary.overcutDistance;
         return config;

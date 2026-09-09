@@ -1,4 +1,5 @@
 #pragma once
+#include "core/machine/SameZoneTransferParameters.h"
 
 #include "core/geometry/Path3D.h"
 #include "core/machining/TubeSection.h"
@@ -81,6 +82,7 @@ namespace cadcam::planning
         double rotationSafetyClearance = 5.0;
         double sameZoneTransferClearance = 0.0;
         bool coordinatedTransferEnabled = true;
+        machine::SameZoneTransferParameters sameZone;
         double connectionDistanceTieTolerance = 1.0e-6;
         bool allowReverse = true;
         bool preserveClosedLoopsAsAtomicGroups = true;

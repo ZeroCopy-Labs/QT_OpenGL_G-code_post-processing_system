@@ -1,6 +1,7 @@
 #include "platform/pch.h"
 
 #include "ui/dialogs/GProfileDialog.h"
+#include "ui/dialogs/ToolTransferDialog.h"
 #include "infrastructure/config/GProfilePathStore.h"
 
 #include <QColorDialog>
@@ -446,19 +447,16 @@ void GProfileDialog::buildUi()
     safetyFormLayout->addRow(QStringLiteral("旋转安全抬刀距离"),
         m_rotationSafetyClearanceSpinBox);
 
-    m_sameZoneTransferClearanceSpinBox = new QDoubleSpinBox(safetyTab);
-    m_sameZoneTransferClearanceSpinBox->setDecimals(3);
-    m_sameZoneTransferClearanceSpinBox->setRange(0.0, 1000000.0);
-    m_sameZoneTransferClearanceSpinBox->setSingleStep(0.1);
-    m_sameZoneTransferClearanceSpinBox->setSuffix(QStringLiteral(" mm"));
-    m_sameZoneTransferClearanceSpinBox->setToolTip(QStringLiteral(
-        "同一区位加工单元之间空移时的离面高度；设置为 0 时不抬刀。"));
-    safetyFormLayout->addRow(QStringLiteral("同区空移离面距离"),
-        m_sameZoneTransferClearanceSpinBox);
-
-    m_coordinatedTransferCheckBox = new QCheckBox(
-        QStringLiteral("启用安全约束下的多轴联动转移"), safetyTab);
-    safetyFormLayout->addRow(QString(), m_coordinatedTransferCheckBox);
+    auto* transferButton = new QPushButton(QStringLiteral("配置多轴联动转移…"), safetyTab);
+    transferButton->setObjectName(QStringLiteral("configureToolTransfer"));
+    safetyFormLayout->addRow(QStringLiteral("同区位转移策略"), transferButton);
+    connect(transferButton, &QPushButton::clicked, this, [this]()
+    {
+        auto config = m_transferConfig;
+        config.rotationSafetyClearance = m_rotationSafetyClearanceSpinBox->value();
+        ToolTransferDialog dialog(config, this);
+        if (dialog.exec() == QDialog::Accepted) m_transferConfig = dialog.config();
+    });
 
     safetyLayout->addLayout(safetyFormLayout);
     safetyLayout->addStretch(1);
@@ -688,10 +686,7 @@ void GProfileDialog::applyProfile(const GProfile& profile)
     setBlockText(m_processUnitFooterEdit, profile.processUnitCode().footer);
     m_rotationSafetyClearanceSpinBox->setValue
         (profile.toolTransferConfig().rotationSafetyClearance);
-    m_sameZoneTransferClearanceSpinBox->setValue
-        (profile.toolTransferConfig().sameZoneTransferClearance);
-    m_coordinatedTransferCheckBox->setChecked
-        (profile.toolTransferConfig().coordinatedTransferEnabled);
+    m_transferConfig = profile.toolTransferConfig();
     m_rotaryPlaneZOffsetSpinBox->setValue(profile.rotaryAxisConfig().machiningPlaneZOffset);
     m_rotaryOvercutDistanceSpinBox->setValue(profile.rotaryAxisConfig().overcutDistance);
     m_lazyRotationProcessingCheckBox->setChecked
@@ -728,20 +723,11 @@ GProfile GProfileDialog::collectProfile() const
 {
     GProfile profile;
     GProfileRotaryAxisConfig rotaryConfig = m_profile.rotaryAxisConfig();
-    GProfileToolTransferConfig transferConfig =
-        m_profile.toolTransferConfig();
+    GProfileToolTransferConfig transferConfig = m_transferConfig;
     transferConfig.rotationSafetyClearance =
         m_rotationSafetyClearanceSpinBox != nullptr
         ? m_rotationSafetyClearanceSpinBox->value()
         : transferConfig.rotationSafetyClearance;
-    transferConfig.sameZoneTransferClearance =
-        m_sameZoneTransferClearanceSpinBox != nullptr
-        ? m_sameZoneTransferClearanceSpinBox->value()
-        : transferConfig.sameZoneTransferClearance;
-    transferConfig.coordinatedTransferEnabled =
-        m_coordinatedTransferCheckBox != nullptr
-        ? m_coordinatedTransferCheckBox->isChecked()
-        : transferConfig.coordinatedTransferEnabled;
     rotaryConfig.machiningPlaneZOffset = m_rotaryPlaneZOffsetSpinBox != nullptr
         ? m_rotaryPlaneZOffsetSpinBox->value()
         : rotaryConfig.machiningPlaneZOffset;

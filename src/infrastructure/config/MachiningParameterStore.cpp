@@ -128,6 +128,18 @@ void MachiningParameterStore::applyTo(GProfile& profile)
         QStringLiteral("coordinatedTransferEnabled"),
         transfer.coordinatedTransferEnabled
     );
+    if (settings.contains(QStringLiteral("sameZoneMotion")))
+    {
+        QJsonObject object = transfer.toJson();
+        object.insert(QStringLiteral("sameZoneMotion"), QJsonObject::fromVariantMap(
+            settings.value(QStringLiteral("sameZoneMotion")).toMap()));
+        transfer = GProfileToolTransferConfig::fromJson(object);
+    }
+    else if (settings.contains(QStringLiteral("sameZoneTransferClearance")))
+    {
+        // 旧参数只有总离面高度，保留其原值。
+        transfer.sameZone.automaticTotalHeight = false;
+    }
     settings.endGroup();
 
     GProfileRotaryAxisConfig rotary = profile.rotaryAxisConfig();
@@ -224,6 +236,8 @@ void MachiningParameterStore::save
         transfer.sameZoneTransferClearance);
     settings.setValue(QStringLiteral("coordinatedTransferEnabled"),
         transfer.coordinatedTransferEnabled);
+    settings.setValue(QStringLiteral("sameZoneMotion"),
+        transfer.toJson().value(QStringLiteral("sameZoneMotion")).toObject().toVariantMap());
     settings.endGroup();
 
     settings.beginGroup(QString::fromLatin1(kRotaryAxisGroup));

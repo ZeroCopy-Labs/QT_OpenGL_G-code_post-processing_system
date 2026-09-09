@@ -93,8 +93,7 @@ private:
     QPlainTextEdit* m_processUnitHeaderEdit = nullptr;
     QPlainTextEdit* m_processUnitFooterEdit = nullptr;
     QDoubleSpinBox* m_rotationSafetyClearanceSpinBox = nullptr;
-    QDoubleSpinBox* m_sameZoneTransferClearanceSpinBox = nullptr;
-    QCheckBox* m_coordinatedTransferCheckBox = nullptr;
+    GProfileToolTransferConfig m_transferConfig;
     QDoubleSpinBox* m_rotaryPlaneZOffsetSpinBox = nullptr;
     QDoubleSpinBox* m_rotaryOvercutDistanceSpinBox = nullptr;
     QCheckBox* m_lazyRotationProcessingCheckBox = nullptr;

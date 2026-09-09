@@ -454,6 +454,7 @@ OperationResult<cadcam::machine::MachineTrajectory> MachineTrajectoryService::bu
         processConfig.sameZoneTransferClearance;
     policy.transfer.coordinatedTransferEnabled =
         processConfig.coordinatedTransferEnabled;
+    policy.transfer.sameZone = processConfig.sameZone;
     policy.machiningPlaneZOffset = processConfig.machiningPlaneZOffset;
     policy.overcutDistance = processConfig.overcutDistance;
     // 显式接线连续连接容差：与规划使用的连接容差一致，不再依赖默认值巧合。

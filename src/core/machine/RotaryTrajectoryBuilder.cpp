@@ -87,7 +87,8 @@ namespace cadcam::machine
             const MachinePose4D& targetCutStart,
             const std::vector<MachineMove>& moves,
             const TransferMotionSummary& summary,
-            double tolerance
+            double tolerance,
+            const RotaryTransferRequest& request
         )
         {
             MachinePose4D current = start;
@@ -149,6 +150,15 @@ namespace cadcam::machine
             }
             if (summary.kind == TransferMotionKind::SameZoneClearanceTransfer)
             {
+                // 缓存签名也必须符合当前五段参数，不能只验证起止点和最高 Z。
+                const auto expected = RotaryTransferPlanner::preview(request, {});
+                if (!expected.succeeded() || !expected.value.has_value()
+                    || expected.value->targets.size() != moves.size()) return false;
+                for (std::size_t i = 0; i < moves.size(); ++i)
+                {
+                    if (machinePositionDistance(moves[i].target, expected.value->targets[i]) > tolerance
+                        || moves[i].transferPhase != expected.value->phases[i]) return false;
+                }
                 const bool departureClearanceReached =
                     summary.departureTarget.z
                     >= start.z + summary.sameZoneTransferClearance - tolerance;
@@ -407,7 +417,7 @@ namespace cadcam::machine
             summary.rotationSafetyClearance =
                 request.policy.rotationSafetyClearance;
             summary.sameZoneTransferClearance =
-                request.policy.sameZoneTransferClearance;
+                request.policy.sameZone.totalHeight(request.policy.sameZoneTransferClearance);
             summary.rotationSafeMachineZ =
                 request.rotationSafeMachineZ;
             summary.coordinated =
@@ -421,6 +431,8 @@ namespace cadcam::machine
                 {
                 case TransferMotionPhase::CoordinatedDeparture:
                     summary.departureTarget = preview.targets[index];
+                    if (preview.kind == TransferMotionKind::SameZoneClearanceTransfer)
+                        summary.rotaryTransferTarget = preview.targets[index];
                     break;
                 case TransferMotionPhase::SafeRotaryTransfer:
                     summary.rotaryTransferTarget = preview.targets[index];
@@ -1020,7 +1032,8 @@ namespace cadcam::machine
                             execution.cutStart,
                             ctx.trajectory.entities[inputIndex].approachMoves,
                             summary,
-                            ctx.policy.numericalEpsilon
+                            ctx.policy.numericalEpsilon,
+                            request
                         ))
                     {
                         ctx.result.status = OperationStatus::Failed;
@@ -1030,7 +1043,7 @@ namespace cadcam::machine
                                 MachineTrajectoryTransferSafetyViolation,
                             DiagnosticSeverity::Error,
                             hasPrevious
-                                ? QStringLiteral("加工单元间转移未满足旋转安全约束。")
+                                ? QStringLiteral("加工单元间转移未满足当前安全参数，请重新排序后导出。")
                                 : QStringLiteral("首次接近轨迹未满足旋转安全约束。"),
                             ctx.taskContext.operationContext,
                             &inputEntity

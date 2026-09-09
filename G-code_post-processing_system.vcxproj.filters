@@ -565,6 +565,9 @@
     <ClCompile Include="src\core\machining\TubeSectionProjector.cpp">
       <Filter>Source Files\core\machining</Filter>
     </ClCompile>
+    <ClCompile Include="src\ui\dialogs\ToolTransferDialog.cpp">
+      <Filter>Source Files\ui\dialogs</Filter>
+    </ClCompile>
     <ClCompile Include="src\core\machining\CutSurfaceExpectation.cpp">
       <Filter>Source Files\core\machining</Filter>
     </ClCompile>
@@ -845,6 +848,12 @@
     </ClInclude>
     <ClInclude Include="include\core\machining\TubeSectionProjector.h">
       <Filter>Header Files\core\machining</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ui\dialogs\ToolTransferDialog.h">
+      <Filter>Header Files\ui\dialogs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\core\machine\SameZoneTransferParameters.h">
+      <Filter>Header Files\core\machine</Filter>
     </ClInclude>
     <ClInclude Include="include\core\machining\CutSurfaceExpectation.h">
       <Filter>Header Files\core\machining</Filter>

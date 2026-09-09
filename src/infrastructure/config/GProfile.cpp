@@ -207,6 +207,13 @@ QJsonObject GProfileToolTransferConfig::toJson() const
     object.insert(kRotationSafetyClearanceKey, rotationSafetyClearance);
     object.insert(kSameZoneTransferClearanceKey, sameZoneTransferClearance);
     object.insert(kCoordinatedTransferEnabledKey, coordinatedTransferEnabled);
+    QJsonObject motion;
+    motion.insert(QStringLiteral("minimumRetractHeight"), sameZone.minimumRetractHeight);
+    motion.insert(QStringLiteral("minimumApproachHeight"), sameZone.minimumApproachHeight);
+    motion.insert(QStringLiteral("automaticTotalHeight"), sameZone.automaticTotalHeight);
+    motion.insert(QStringLiteral("departureRatio"), sameZone.departureRatio);
+    motion.insert(QStringLiteral("approachRatio"), sameZone.approachRatio);
+    object.insert(QStringLiteral("sameZoneMotion"), motion);
     return object;
 }
 
@@ -231,6 +238,13 @@ GProfileToolTransferConfig GProfileToolTransferConfig::fromJson
     config.coordinatedTransferEnabled =
         object.value(kCoordinatedTransferEnabledKey)
             .toBool(config.coordinatedTransferEnabled);
+    const QJsonObject motion = object.value(QStringLiteral("sameZoneMotion")).toObject();
+    config.sameZone.minimumRetractHeight = motion.value(QStringLiteral("minimumRetractHeight")).toDouble(0.0);
+    config.sameZone.minimumApproachHeight = motion.value(QStringLiteral("minimumApproachHeight")).toDouble(0.0);
+    config.sameZone.automaticTotalHeight = motion.value(QStringLiteral("automaticTotalHeight")).toBool(
+        !object.contains(kSameZoneTransferClearanceKey) && !object.contains(kApproachClearanceKey));
+    config.sameZone.departureRatio = motion.value(QStringLiteral("departureRatio")).toDouble(0.25);
+    config.sameZone.approachRatio = motion.value(QStringLiteral("approachRatio")).toDouble(0.25);
     return config;
 }
 

@@ -1,7 +1,5 @@
 #include "core/machine/RotaryTransferPlanner.h"
 
-#include "core/machine/RotaryKinematics.h"
-
 #include <algorithm>
 #include <cmath>
 
@@ -13,20 +11,6 @@ namespace cadcam::machine
         (
             const MachinePose4D& left,
             const MachinePose4D& right
-        )
-        {
-            return std::sqrt
-            (
-                (left.x - right.x) * (left.x - right.x)
-                + (left.y - right.y) * (left.y - right.y)
-                + (left.z - right.z) * (left.z - right.z)
-            );
-        }
-
-        double sourceDistance
-        (
-            const geometry::Vector3d& left,
-            const geometry::Vector3d& right
         )
         {
             return std::sqrt
@@ -61,33 +45,6 @@ namespace cadcam::machine
             };
         }
 
-        MachinePose4D localClearancePose
-        (
-            const geometry::Vector3d& sourcePoint,
-            const MachinePose4D& pose,
-            double outwardDistance,
-            const RotaryTransferRequest& request
-        )
-        {
-            static const std::optional<machining::TubeSectionModel>
-                emptySection;
-            const std::optional<machining::TubeSectionModel>& section =
-                request.tubeSection != nullptr
-                ? *request.tubeSection : emptySection;
-            const geometry::Vector3d retract =
-                RotaryKinematics::sourceLocalClearancePose
-                (
-                    sourcePoint,
-                    outwardDistance,
-                    section,
-                    request.tubeCenterY,
-                    request.tubeCenterZ,
-                    request.numericalEpsilon
-                );
-            MachinePose4D result = pose;
-            result.z += sourceDistance(sourcePoint, retract);
-            return result;
-        }
 
         TransferMotionKind classifyTransfer
         (
@@ -107,7 +64,7 @@ namespace cadcam::machine
                 > request.numericalEpsilon;
             if (zoneChanged || rotationRequired)
                 return TransferMotionKind::CrossZoneRotaryTransfer;
-            return request.policy.sameZoneTransferClearance
+            return request.policy.sameZone.totalHeight(request.policy.sameZoneTransferClearance)
                     <= request.numericalEpsilon
                 ? TransferMotionKind::SameZoneSurfaceTransfer
                 : TransferMotionKind::SameZoneClearanceTransfer;
@@ -191,7 +148,8 @@ namespace cadcam::machine
             || !std::isfinite(request.policy.rotationSafetyClearance)
             || request.policy.rotationSafetyClearance <= 0.0
             || !std::isfinite(request.policy.sameZoneTransferClearance)
-            || request.policy.sameZoneTransferClearance < 0.0)
+            || request.policy.sameZoneTransferClearance < 0.0
+            || !request.policy.sameZone.valid(request.policy.sameZoneTransferClearance))
         {
             result.status = OperationStatus::InvalidInput;
             result.addDiagnostic(transferDiagnostic
@@ -215,36 +173,38 @@ namespace cadcam::machine
         else if (preview.kind
             == TransferMotionKind::SameZoneClearanceTransfer)
         {
-            const MachinePose4D previousClearance = localClearancePose
-                (request.previousSourceEnd, request.previousCutEnd,
-                    request.policy.sameZoneTransferClearance, request);
-            const MachinePose4D nextClearance = localClearancePose
-                (request.nextSourceStart, request.nextCutStart,
-                    request.policy.sameZoneTransferClearance, request);
-            const double departureFactor =
-                request.policy.coordinatedTransferEnabled ? 0.25 : 0.0;
-            const double approachFactor =
-                request.policy.coordinatedTransferEnabled ? 0.75 : 1.0;
-            MachinePose4D departure = interpolate
-                (previousClearance, nextClearance, departureFactor);
-            departure.z = previousClearance.z;
+            const auto& parameters = request.policy.sameZone;
+            const double height = parameters.totalHeight(request.policy.sameZoneTransferClearance);
+            const double topZ = std::max(request.previousCutEnd.z, request.nextCutStart.z) + height;
+            const bool linked = request.policy.coordinatedTransferEnabled;
+            MachinePose4D retract = request.previousCutEnd;
+            retract.z = linked ? retract.z + parameters.minimumRetractHeight : topZ;
+            MachinePose4D landing = request.nextCutStart;
+            landing.z = linked ? landing.z + parameters.minimumApproachHeight : topZ;
+            landing.aDegrees = request.previousCutEnd.aDegrees;
+            // 高度为零的联动段不占用水平行程。
+            const double departureRatio = linked && topZ > retract.z + request.numericalEpsilon
+                ? parameters.departureRatio : 0.0;
+            const double approachRatio = linked && topZ > landing.z + request.numericalEpsilon
+                ? std::min(parameters.approachRatio, 1.0 - departureRatio) : 0.0;
+            MachinePose4D departure = interpolate(request.previousCutEnd, request.nextCutStart, departureRatio);
+            departure.z = topZ;
             departure.aDegrees = request.previousCutEnd.aDegrees;
-            MachinePose4D transfer = interpolate
-                (previousClearance, nextClearance, approachFactor);
-            transfer.z = nextClearance.z;
+            MachinePose4D transfer = interpolate(request.previousCutEnd, request.nextCutStart, 1.0 - approachRatio);
+            transfer.z = topZ;
             transfer.aDegrees = request.previousCutEnd.aDegrees;
-            MachinePose4D approach = request.nextCutStart;
-            approach.aDegrees = request.previousCutEnd.aDegrees;
-            preview.finalApproachOrigin = transfer;
+            appendDistinct(preview, request.previousCutEnd, retract,
+                TransferMotionPhase::CoordinatedDeparture, request.numericalEpsilon);
             appendDistinct(preview, request.previousCutEnd, departure,
-                TransferMotionPhase::CoordinatedDeparture,
-                request.numericalEpsilon);
+                TransferMotionPhase::CoordinatedDeparture, request.numericalEpsilon);
             appendDistinct(preview, request.previousCutEnd, transfer,
-                TransferMotionPhase::SurfaceTransfer,
-                request.numericalEpsilon);
-            appendDistinct(preview, request.previousCutEnd, approach,
-                TransferMotionPhase::CoordinatedApproach,
-                request.numericalEpsilon);
+                TransferMotionPhase::SurfaceTransfer, request.numericalEpsilon);
+            appendDistinct(preview, request.previousCutEnd, landing,
+                TransferMotionPhase::CoordinatedApproach, request.numericalEpsilon);
+            appendDistinct(preview, request.previousCutEnd, request.nextCutStart,
+                TransferMotionPhase::CoordinatedApproach, request.numericalEpsilon);
+            preview.finalApproachOrigin = preview.targets.size() >= 2U
+                ? preview.targets[preview.targets.size() - 2U] : request.previousCutEnd;
         }
         else
         {

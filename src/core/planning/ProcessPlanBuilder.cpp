@@ -1795,6 +1795,7 @@ namespace cadcam::planning
                             policy.sameZoneTransferClearance;
                         transferPolicy.coordinatedTransferEnabled =
                             policy.coordinatedTransferEnabled;
+                        transferPolicy.sameZone = policy.sameZone;
                         traversalSelection->previousTransferAnchor =
                             initialSelection
                             ? currentPosition

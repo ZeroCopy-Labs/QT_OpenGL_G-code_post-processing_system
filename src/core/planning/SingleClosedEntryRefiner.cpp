@@ -129,6 +129,7 @@ namespace cadcam::planning
                 policy.sameZoneTransferClearance;
             value.transfer.coordinatedTransferEnabled =
                 policy.coordinatedTransferEnabled;
+            value.transfer.sameZone = policy.sameZone;
             value.machiningPlaneZOffset =
                 policy.machiningPlaneZOffset;
             value.overcutDistance = policy.overcutDistance;

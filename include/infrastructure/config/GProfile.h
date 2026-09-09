@@ -1,4 +1,5 @@
 #pragma once
+#include "core/machine/SameZoneTransferParameters.h"
 
 #include <QColor>
 #include <QJsonObject>
@@ -20,6 +21,7 @@ struct GProfileToolTransferConfig
     double rotationSafetyClearance = 5.0;
     double sameZoneTransferClearance = 0.0;
     bool coordinatedTransferEnabled = true;
+    cadcam::machine::SameZoneTransferParameters sameZone;
 
     QJsonObject toJson() const;
     static GProfileToolTransferConfig fromJson(const QJsonObject& object);

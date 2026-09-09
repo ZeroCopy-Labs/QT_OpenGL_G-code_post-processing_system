@@ -703,9 +703,10 @@ namespace cadcam::machine
         if (previousOwnerZone.has_value() && nextOwnerZone.has_value()
             && previousOwnerZone == nextOwnerZone)
         {
-            return transfer.sameZoneTransferClearance > 0.0
+            const double height = transfer.sameZone.totalHeight(transfer.sameZoneTransferClearance);
+            return height > 0.0
                 ? sourceLocalClearancePose
-                    (cutEnd, transfer.sameZoneTransferClearance, section,
+                    (cutEnd, height, section,
                         tubeCenterY, tubeCenterZ, tolerance)
                 : cutEnd;
         }

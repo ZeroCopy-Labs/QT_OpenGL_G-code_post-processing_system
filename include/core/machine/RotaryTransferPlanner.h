@@ -1,4 +1,5 @@
 #pragma once
+#include "core/machine/SameZoneTransferParameters.h"
 
 #include "core/diagnostics/OperationContext.h"
 #include "core/diagnostics/OperationResult.h"
@@ -41,6 +42,7 @@ namespace cadcam::machine
         double rotationSafetyClearance = 5.0;
         double sameZoneTransferClearance = 0.0;
         bool coordinatedTransferEnabled = true;
+        SameZoneTransferParameters sameZone;
     };
 
     struct RotaryTransferRequest

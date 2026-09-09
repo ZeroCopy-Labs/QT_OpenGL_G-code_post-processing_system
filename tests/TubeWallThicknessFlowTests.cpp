@@ -10,6 +10,7 @@
 #include <iostream>
 #include <stdexcept>
 #include "CutSurfaceCorrectionFlowTests.h"
+#include "ToolTransferTests.h"
 
 int main(int argc, char** argv)
 {
@@ -24,6 +25,7 @@ int main(int argc, char** argv)
     {
         cutSurfaceCorrectionFlowTests();
         boundaryMinimumXOrderTests();
+        toolTransferTests();
         Gcode_postprocessing_system window;
         auto* settings = window.findChild<MachiningSettingsWidget*>();
         auto* thickness = window.findChild<QDoubleSpinBox*>(QStringLiteral("tubeWallThickness"));
