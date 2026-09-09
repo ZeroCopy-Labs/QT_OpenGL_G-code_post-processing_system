@@ -472,20 +472,9 @@ OperationResult<cadcam::machine::MachineTrajectory> MachineTrajectoryService::bu
     }
     else
     {
-        double minimumY = input.entities.front().path.vertices.front().position.y;
-        double maximumY = minimumY;
-        double minimumZ = input.entities.front().path.vertices.front().position.z;
-        double maximumZ = minimumZ;
-        for (const auto& entity : input.entities)
-            for (const auto& vertex : entity.path.vertices)
-            {
-                minimumY = std::min(minimumY, vertex.position.y);
-                maximumY = std::max(maximumY, vertex.position.y);
-                minimumZ = std::min(minimumZ, vertex.position.z);
-                maximumZ = std::max(maximumZ, vertex.position.z);
-            }
-        policy.tubeCenterY = (minimumY + maximumY) * 0.5;
-        policy.tubeCenterZ = (minimumZ + maximumZ) * 0.5;
+        // 截面中心缺失时默认使用 (0,0)，即默认位于 X 轴上。
+        policy.tubeCenterY = 0.0;
+        policy.tubeCenterZ = 0.0;
     }
     policy.surfaceClassificationTolerance = std::max(policy.numericalEpsilon, 1.0e-6);
     if (tubeSection.has_value() && !tubeSection->geometry.boundary.empty())

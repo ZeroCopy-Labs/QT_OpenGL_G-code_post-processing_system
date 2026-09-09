@@ -26,7 +26,8 @@ public:
         int roundedCornerCount,
         bool manuallyConfigured,
         double centerY,
-        double centerZ
+        double centerZ,
+        bool centerUserSpecified
     );
     void setRotaryEndCutCount(int count);
     void setRotaryTubeWallThickness(double wallThickness);
@@ -40,6 +41,8 @@ signals:
     void useDefaultExportDirectoryChanged(bool enabled);
     void useDxfFileNameChanged(bool enabled);
     void manualRotaryTubeSectionRequested(double yLength, double zWidth, double cornerRadius);
+    void sectionCenterRequested(double centerY, double centerZ);
+    void sectionCenterClearRequested();
     void rotaryTubeWallThicknessChanged(double wallThickness);
     void rotaryLaserWallImpactVisibleChanged(bool visible);
     void rotaryExpectedSurfaceVisibleChanged(bool visible);
@@ -61,11 +64,15 @@ private:
     QDoubleSpinBox* m_yLengthInput = nullptr;
     QDoubleSpinBox* m_zWidthInput = nullptr;
     QDoubleSpinBox* m_cornerRadiusInput = nullptr;
+    QDoubleSpinBox* m_centerYInput = nullptr;
+    QDoubleSpinBox* m_centerZInput = nullptr;
     QDoubleSpinBox* m_wallThicknessInput = nullptr;
     QCheckBox* m_laserWallImpactVisibleCheckBox = nullptr;
     QCheckBox* m_expectedSurfaceVisibleCheckBox = nullptr;
     QLabel* m_endCutPreviewStatusValue = nullptr;
     QPushButton* m_applyManualSectionButton = nullptr;
+    QPushButton* m_applySectionCenterButton = nullptr;
+    QPushButton* m_clearSectionCenterButton = nullptr;
     QLabel* m_roundedCornerCountValue = nullptr;
     QLabel* m_centerLineValue = nullptr;
     QLabel* m_rotaryEndCutCountValue = nullptr;

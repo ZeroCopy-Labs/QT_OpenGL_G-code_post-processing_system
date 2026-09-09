@@ -575,7 +575,7 @@ bool Gcode_postprocessing_system::exportGCode
     (
         m_rotaryTubeSectionModel.centerY,
         m_rotaryTubeSectionModel.centerZ,
-        m_rotaryTubeSectionModel.valid && m_rotaryTubeSectionModel.centerValid
+        m_rotaryTubeSectionModel.centerValid
     );
 
     QString resolvedExportPath;

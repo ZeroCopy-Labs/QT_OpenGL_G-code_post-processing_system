@@ -1885,6 +1885,75 @@ void Gcode_postprocessing_system::initializeMachiningSettingsDock()
     connect
     (
         m_machiningSettingsWidget,
+        &MachiningSettingsWidget::sectionCenterRequested,
+        this,
+        [this](double centerY, double centerZ)
+        {
+            if (!std::isfinite(centerY) || !std::isfinite(centerZ))
+            {
+                syncMachiningSettingsState();
+                const QString message = QStringLiteral("截面中心输入无效，请检查 Y、Z 数值。");
+                ui->openGLWidget->appendCommandMessage(message);
+                statusBar()->showMessage(message, 5000);
+                return;
+            }
+
+            if (!setRotaryTubeSectionUserCenter
+                (cadcam::geometry::Vector2d{ centerY, centerZ }))
+            {
+                syncMachiningSettingsState();
+                const QString message = QStringLiteral("截面中心设置失败。");
+                ui->openGLWidget->appendCommandMessage(message);
+                statusBar()->showMessage(message, 5000);
+                return;
+            }
+
+            const QString message = QStringLiteral
+                ("方管截面中心已设置为 Y=%1 mm，Z=%2 mm，将优先用于表面归属、轨迹和安全位置计算。")
+                .arg(centerY, 0, 'f', 3)
+                .arg(centerZ, 0, 'f', 3);
+            ui->openGLWidget->appendCommandMessage(message);
+            statusBar()->showMessage(message, 5000);
+        }
+    );
+    connect
+    (
+        m_machiningSettingsWidget,
+        &MachiningSettingsWidget::sectionCenterClearRequested,
+        this,
+        [this]()
+        {
+            if (!m_rotaryTubeSectionModel.userCenter.has_value())
+            {
+                const QString message = QStringLiteral("当前没有手动截面中心，无需清除。");
+                ui->openGLWidget->appendCommandMessage(message);
+                statusBar()->showMessage(message, 4000);
+                return;
+            }
+
+            if (!setRotaryTubeSectionUserCenter(std::nullopt))
+            {
+                syncMachiningSettingsState();
+                const QString message = QStringLiteral("截面中心清除失败。");
+                ui->openGLWidget->appendCommandMessage(message);
+                statusBar()->showMessage(message, 5000);
+                return;
+            }
+
+            const cadcam::geometry::Vector2d restored =
+                m_rotaryTubeSectionModel.effectiveCenter();
+            const QString message = m_rotaryTubeSectionModel.automaticCenter.has_value()
+                ? QStringLiteral("方管截面中心已清除，恢复自动识别中心 Y=%1 mm，Z=%2 mm。")
+                    .arg(restored.x, 0, 'f', 3)
+                    .arg(restored.y, 0, 'f', 3)
+                : QStringLiteral("方管截面中心已清除，恢复默认 (0, 0)。");
+            ui->openGLWidget->appendCommandMessage(message);
+            statusBar()->showMessage(message, 5000);
+        }
+    );
+    connect
+    (
+        m_machiningSettingsWidget,
         &MachiningSettingsWidget::rotaryTubeWallThicknessChanged,
         this,
         [this](double wallThickness)
@@ -2319,7 +2388,8 @@ void Gcode_postprocessing_system::syncMachiningSettingsState()
         m_rotaryTubeSectionModel.roundedCornerCount,
         m_rotaryTubeSectionModel.manuallyConfigured,
         m_rotaryTubeSectionModel.centerY,
-        m_rotaryTubeSectionModel.centerZ
+        m_rotaryTubeSectionModel.centerZ,
+        m_rotaryTubeSectionModel.userCenter.has_value()
     );
     m_machiningSettingsWidget->setRotaryTubeWallThickness
         (rotaryTubeWallThickness());

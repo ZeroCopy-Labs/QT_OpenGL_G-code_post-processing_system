@@ -6,6 +6,7 @@
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
@@ -29,6 +30,16 @@ namespace
         input->setSingleStep(1.0);
         input->setSuffix(QStringLiteral(" mm"));
         input->setSpecialValueText(QStringLiteral("--"));
+        return input;
+    }
+
+    QDoubleSpinBox* createSignedSectionInput(QWidget* parent)
+    {
+        QDoubleSpinBox* input = new QDoubleSpinBox(parent);
+        input->setDecimals(3);
+        input->setRange(-1000000.0, 1000000.0);
+        input->setSingleStep(1.0);
+        input->setSuffix(QStringLiteral(" mm"));
         return input;
     }
 }
@@ -86,6 +97,12 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     m_zWidthInput = createSectionInput(statusGroup);
     m_cornerRadiusInput = createSectionInput(statusGroup);
     m_cornerRadiusInput->setSingleStep(0.1);
+    m_centerYInput = createSignedSectionInput(statusGroup);
+    m_centerYInput->setToolTip(QStringLiteral(
+        "方管截面中心 Y 坐标。手动设置后优先于自动识别中心；清除后恢复自动识别中心或默认 (0,0)。"));
+    m_centerZInput = createSignedSectionInput(statusGroup);
+    m_centerZInput->setToolTip(QStringLiteral(
+        "方管截面中心 Z 坐标。手动设置后优先于自动识别中心；清除后恢复自动识别中心或默认 (0,0)。"));
     m_wallThicknessInput = createSectionInput(statusGroup);
     m_wallThicknessInput->setObjectName(QStringLiteral("tubeWallThickness"));
     m_wallThicknessInput->setRange(0.0, 100000.0);
@@ -109,6 +126,16 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     m_applyManualSectionButton = new QPushButton(QStringLiteral("应用手动截面"), statusGroup);
     m_applyManualSectionButton->setToolTip
         (QStringLiteral("手动设置优先用于后续内部线识别、加工断面、排序和导出。"));
+    m_applySectionCenterButton = new QPushButton(QStringLiteral("应用截面中心"), statusGroup);
+    m_applySectionCenterButton->setToolTip(QStringLiteral(
+        "把上方 Y、Z 输入作为方管截面中心，优先于自动识别中心。"));
+    m_clearSectionCenterButton = new QPushButton(QStringLiteral("清除截面中心"), statusGroup);
+    m_clearSectionCenterButton->setToolTip(QStringLiteral(
+        "恢复自动识别中心；没有自动识别结果时使用默认 (0,0)。"));
+    QHBoxLayout* centerButtonLayout = new QHBoxLayout;
+    centerButtonLayout->setContentsMargins(0, 0, 0, 0);
+    centerButtonLayout->addWidget(m_applySectionCenterButton);
+    centerButtonLayout->addWidget(m_clearSectionCenterButton);
     m_roundedCornerCountValue = createStatusValue(statusGroup);
     m_centerLineValue = createStatusValue(statusGroup);
     m_rotaryEndCutCountValue = createStatusValue(statusGroup);
@@ -116,6 +143,9 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     statusLayout->addRow(QStringLiteral("Y 长："), m_yLengthInput);
     statusLayout->addRow(QStringLiteral("Z 宽："), m_zWidthInput);
     statusLayout->addRow(QStringLiteral("圆角半径："), m_cornerRadiusInput);
+    statusLayout->addRow(QStringLiteral("截面中心 Y："), m_centerYInput);
+    statusLayout->addRow(QStringLiteral("截面中心 Z："), m_centerZInput);
+    statusLayout->addRow(QString(), centerButtonLayout);
     statusLayout->addRow(QStringLiteral("方管厚度："), m_wallThicknessInput);
     auto* positiveCorrection = new QCheckBox(QStringLiteral("加工断面正向修正（+X）"), statusGroup);
     positiveCorrection->setObjectName(QStringLiteral("cutSurfacePositiveCorrection"));
@@ -200,6 +230,16 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
             m_cornerRadiusInput->value()
         );
     });
+    connect(m_applySectionCenterButton, &QPushButton::clicked, this, [this]()
+    {
+        emit sectionCenterRequested
+        (
+            m_centerYInput->value(),
+            m_centerZInput->value()
+        );
+    });
+    connect(m_clearSectionCenterButton, &QPushButton::clicked, this,
+        &MachiningSettingsWidget::sectionCenterClearRequested);
     connect(m_wallThicknessInput, &QDoubleSpinBox::editingFinished, this, [this]()
     {
         if (!m_updatingUi)
@@ -253,7 +293,8 @@ void MachiningSettingsWidget::setRotaryTubeSectionProperties
     int roundedCornerCount,
     bool manuallyConfigured,
     double centerY,
-    double centerZ
+    double centerZ,
+    bool centerUserSpecified
 )
 {
     m_updatingUi = true;
@@ -262,6 +303,15 @@ void MachiningSettingsWidget::setRotaryTubeSectionProperties
     m_sectionStatusValue->setText(recognized
         ? (manuallyConfigured ? QStringLiteral("已手动设置") : QStringLiteral("已识别"))
         : QStringLiteral("未识别"));
+    m_centerYInput->setValue(centerY);
+    m_centerZInput->setValue(centerZ);
+    m_centerLineValue->setText(centerUserSpecified
+        ? QStringLiteral("Y=%1  Z=%2（手动）")
+            .arg(centerY, 0, 'f', 3)
+            .arg(centerZ, 0, 'f', 3)
+        : QStringLiteral("Y=%1  Z=%2")
+            .arg(centerY, 0, 'f', 3)
+            .arg(centerZ, 0, 'f', 3));
 
     if (recognized)
     {
@@ -270,12 +320,6 @@ void MachiningSettingsWidget::setRotaryTubeSectionProperties
         m_zWidthInput->setValue(zWidth);
         m_cornerRadiusInput->setValue(cornerRadius);
         m_roundedCornerCountValue->setText(QString::number(std::clamp(roundedCornerCount, 0, 4)));
-        m_centerLineValue->setText
-        (
-            QStringLiteral("Y=%1  Z=%2")
-                .arg(centerY, 0, 'f', 3)
-                .arg(centerZ, 0, 'f', 3)
-        );
     }
     else
     {
@@ -283,7 +327,11 @@ void MachiningSettingsWidget::setRotaryTubeSectionProperties
         m_zWidthInput->setValue(0.0);
         m_cornerRadiusInput->setValue(0.0);
         m_roundedCornerCountValue->setText(QStringLiteral("--"));
-        m_centerLineValue->setText(QStringLiteral("--"));
+
+        if (!centerUserSpecified)
+        {
+            m_centerLineValue->setText(QStringLiteral("--"));
+        }
 
         if (!m_sectionBlinkTimer->isActive())
         {

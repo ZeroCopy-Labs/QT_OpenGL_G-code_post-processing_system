@@ -2934,14 +2934,18 @@ bool Gcode_postprocessing_system::recognizeRotaryTubeSection(bool interactive)
 bool Gcode_postprocessing_system::setRotaryTubeSectionUserCenter
     (std::optional<cadcam::geometry::Vector2d> center)
 {
+    const bool hadUserCenter = m_rotaryTubeSectionModel.userCenter.has_value();
     const cadcam::geometry::Vector2d previous =
         m_rotaryTubeSectionModel.effectiveCenter();
     if (!m_rotaryTubeSectionModel.setUserCenter(center)) return false;
     const cadcam::geometry::Vector2d current =
         m_rotaryTubeSectionModel.effectiveCenter();
-    if (previous.x == current.x && previous.y == current.y) return true;
+    const bool centerChanged = previous.x != current.x || previous.y != current.y;
+    const bool presenceChanged =
+        hadUserCenter != m_rotaryTubeSectionModel.userCenter.has_value();
+    if (!centerChanged && !presenceChanged) return true;
 
-    invalidateProcessOrdersAfterEndCutChange();
+    if (centerChanged) invalidateProcessOrdersAfterEndCutChange();
     syncToolPanelState();
     syncMachiningSettingsState();
     return true;
