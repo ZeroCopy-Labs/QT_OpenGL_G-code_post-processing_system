@@ -7,6 +7,7 @@ class QDoubleSpinBox;
 class QLabel;
 class QPushButton;
 class QTimer;
+class TubeSectionDiagramWidget;
 
 class MachiningSettingsWidget : public QWidget
 {
@@ -77,7 +78,9 @@ private:
     QLabel* m_centerLineValue = nullptr;
     QLabel* m_rotaryEndCutCountValue = nullptr;
     QTimer* m_sectionBlinkTimer = nullptr;
+    TubeSectionDiagramWidget* m_sectionDiagram = nullptr;
     bool m_sectionRecognized = false;
+    bool m_sectionManuallyConfigured = false;
     bool m_sectionBlinkVisible = true;
     bool m_updatingUi = false;
 };

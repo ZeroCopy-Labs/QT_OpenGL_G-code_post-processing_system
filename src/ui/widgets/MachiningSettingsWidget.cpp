@@ -8,10 +8,36 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPainter>
+#include <QPainterPath>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSizePolicy>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QWheelEvent>
+
+#include <algorithm>
+
+// 输入框仅在获得焦点（被左键点击过）后响应滚轮调整数值；
+// 未聚焦时忽略滚轮，事件继续冒泡给外层滚动区域，用于滚动面板。
+class FocusWheelDoubleSpinBox : public QDoubleSpinBox
+{
+public:
+    using QDoubleSpinBox::QDoubleSpinBox;
+
+protected:
+    void wheelEvent(QWheelEvent* event) override
+    {
+        if (!hasFocus())
+        {
+            event->ignore();
+            return;
+        }
+
+        QDoubleSpinBox::wheelEvent(event);
+    }
+};
 
 namespace
 {
@@ -24,7 +50,7 @@ namespace
 
     QDoubleSpinBox* createSectionInput(QWidget* parent)
     {
-        QDoubleSpinBox* input = new QDoubleSpinBox(parent);
+        QDoubleSpinBox* input = new FocusWheelDoubleSpinBox(parent);
         input->setDecimals(3);
         input->setRange(0.0, 1000000.0);
         input->setSingleStep(1.0);
@@ -35,7 +61,7 @@ namespace
 
     QDoubleSpinBox* createSignedSectionInput(QWidget* parent)
     {
-        QDoubleSpinBox* input = new QDoubleSpinBox(parent);
+        QDoubleSpinBox* input = new FocusWheelDoubleSpinBox(parent);
         input->setDecimals(3);
         input->setRange(-1000000.0, 1000000.0);
         input->setSingleStep(1.0);
@@ -43,6 +69,131 @@ namespace
         return input;
     }
 }
+
+// 方管 YZ 截面示意图：外轮廓、圆角、中心与 X 轴标记，随截面参数实时重绘。
+class TubeSectionDiagramWidget : public QWidget
+{
+public:
+    explicit TubeSectionDiagramWidget(QWidget* parent = nullptr)
+        : QWidget(parent)
+    {
+        setMinimumHeight(170);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    }
+
+    void setSection
+    (
+        bool recognized,
+        double yLength,
+        double zWidth,
+        double cornerRadius,
+        double centerY,
+        double centerZ,
+        bool centerUserSpecified
+    )
+    {
+        m_recognized = recognized;
+        m_yLength = std::max(0.0, yLength);
+        m_zWidth = std::max(0.0, zWidth);
+        m_cornerRadius = std::max(0.0, cornerRadius);
+        m_centerY = centerY;
+        m_centerZ = centerZ;
+        m_centerUserSpecified = centerUserSpecified;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        QFont labelFont = font();
+        labelFont.setPointSizeF(std::max(7.5, labelFont.pointSizeF() - 1.0));
+        painter.setFont(labelFont);
+
+        const QColor outlineColor = palette().color(QPalette::WindowText);
+        const QColor fillColor = palette().color(QPalette::Base);
+        const QColor accentColor = palette().color(QPalette::Highlight);
+        const QColor dimColor = palette().color(QPalette::Disabled, QPalette::WindowText);
+
+        const QRectF drawingArea = QRectF(rect()).adjusted(6.0, 8.0, -6.0, -8.0);
+        const bool hasShape = m_recognized && m_yLength > 0.0 && m_zWidth > 0.0;
+
+        if (!hasShape)
+        {
+            painter.setPen(dimColor);
+            painter.drawText(drawingArea, Qt::AlignCenter,
+                QStringLiteral("尚未识别方管截面"));
+            return;
+        }
+
+        // 世界坐标（Y 向右、Z 向下）→ 控件坐标，中心 (centerY, centerZ) 置于绘图区中心。
+        const double halfY = m_yLength * 0.5;
+        const double halfZ = m_zWidth * 0.5;
+        const double radius = std::min(m_cornerRadius, std::min(halfY, halfZ));
+        const double scale = std::min
+        (
+            drawingArea.width() / (2.0 * halfY + 8.0),
+            drawingArea.height() / (2.0 * halfZ + 8.0)
+        );
+        const QPointF center =
+            drawingArea.center() - QPointF(24.0, 0.0);
+        auto toWidget = [center, scale](double y, double z)
+        {
+            return QPointF(center.x() + y * scale, center.y() + z * scale);
+        };
+
+        const QPointF topLeft = toWidget(-halfY, -halfZ);
+        const QPointF bottomRight = toWidget(halfY, halfZ);
+        const QRectF outlineRect(topLeft, bottomRight);
+        QPainterPath outlinePath;
+        outlinePath.addRoundedRect(outlineRect,
+            radius * scale, radius * scale);
+        painter.fillPath(outlinePath, fillColor);
+        painter.setPen(QPen(outlineColor, 1.4));
+        painter.drawPath(outlinePath);
+
+        // 中心十字与 X 轴标记（X 轴垂直于截面）。
+        painter.setPen(QPen(accentColor, 1.4));
+        const double crossHalf = 6.0;
+        painter.drawLine(QPointF(center.x() - crossHalf, center.y()),
+            QPointF(center.x() + crossHalf, center.y()));
+        painter.drawLine(QPointF(center.x(), center.y() - crossHalf),
+            QPointF(center.x(), center.y() + crossHalf));
+        painter.drawEllipse(center, 3.2, 3.2);
+        painter.drawText(QPointF(center.x() + 7.0, center.y() - 7.0),
+            QStringLiteral("X 轴"));
+
+        // 尺寸与中心标注。
+        const QString dimensions = QStringLiteral("Y 长 %1\nZ 宽 %2\n圆角 %3")
+            .arg(m_yLength, 0, 'f', 3)
+            .arg(m_zWidth, 0, 'f', 3)
+            .arg(m_cornerRadius, 0, 'f', 3);
+        const QString centerText = m_centerUserSpecified
+            ? QStringLiteral("中心 Y=%1  Z=%2（手动）")
+                .arg(m_centerY, 0, 'f', 3)
+                .arg(m_centerZ, 0, 'f', 3)
+            : QStringLiteral("中心 Y=%1  Z=%2")
+                .arg(m_centerY, 0, 'f', 3)
+                .arg(m_centerZ, 0, 'f', 3);
+        const QRectF dimensionsRect = QRectF(drawingArea.left(), drawingArea.top(),
+            drawingArea.width(), drawingArea.height());
+        painter.setPen(outlineColor);
+        painter.drawText(dimensionsRect.adjusted(0.0, 0.0, 0.0, -18.0),
+            Qt::AlignRight | Qt::AlignTop, dimensions);
+        painter.drawText(dimensionsRect.adjusted(0.0, -18.0, 0.0, 0.0),
+            Qt::AlignLeft | Qt::AlignBottom, centerText);
+    }
+
+private:
+    bool m_recognized = false;
+    double m_yLength = 0.0;
+    double m_zWidth = 0.0;
+    double m_cornerRadius = 0.0;
+    double m_centerY = 0.0;
+    double m_centerZ = 0.0;
+    bool m_centerUserSpecified = false;
+};
 
 MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     : QWidget(parent)
@@ -90,82 +241,102 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     contentLayout->addWidget(exportGroup);
 
     QGroupBox* statusGroup = new QGroupBox(QStringLiteral("方管识别状态"), content);
-    QFormLayout* statusLayout = new QFormLayout(statusGroup);
-    statusLayout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-    m_sectionStatusValue = createStatusValue(statusGroup);
-    m_yLengthInput = createSectionInput(statusGroup);
-    m_zWidthInput = createSectionInput(statusGroup);
-    m_cornerRadiusInput = createSectionInput(statusGroup);
+    QVBoxLayout* statusGroupLayout = new QVBoxLayout(statusGroup);
+    statusGroupLayout->setContentsMargins(6, 6, 6, 6);
+    statusGroupLayout->setSpacing(8);
+
+    QGroupBox* parametersGroup = new QGroupBox(QStringLiteral("截面参数"), statusGroup);
+    QVBoxLayout* parametersLayout = new QVBoxLayout(parametersGroup);
+    parametersLayout->setSpacing(6);
+    m_sectionDiagram = new TubeSectionDiagramWidget(parametersGroup);
+    parametersLayout->addWidget(m_sectionDiagram);
+
+    QFormLayout* parametersForm = new QFormLayout;
+    parametersForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    m_yLengthInput = createSectionInput(parametersGroup);
+    m_zWidthInput = createSectionInput(parametersGroup);
+    m_cornerRadiusInput = createSectionInput(parametersGroup);
     m_cornerRadiusInput->setSingleStep(0.1);
-    m_centerYInput = createSignedSectionInput(statusGroup);
+    m_centerYInput = createSignedSectionInput(parametersGroup);
     m_centerYInput->setToolTip(QStringLiteral(
         "方管截面中心 Y 坐标。手动设置后优先于自动识别中心；清除后恢复自动识别中心或默认 (0,0)。"));
-    m_centerZInput = createSignedSectionInput(statusGroup);
+    m_centerZInput = createSignedSectionInput(parametersGroup);
     m_centerZInput->setToolTip(QStringLiteral(
         "方管截面中心 Z 坐标。手动设置后优先于自动识别中心；清除后恢复自动识别中心或默认 (0,0)。"));
-    m_wallThicknessInput = createSectionInput(statusGroup);
+    m_wallThicknessInput = createSectionInput(parametersGroup);
     m_wallThicknessInput->setObjectName(QStringLiteral("tubeWallThickness"));
     m_wallThicknessInput->setRange(0.0, 100000.0);
     m_wallThicknessInput->setSingleStep(0.1);
     m_wallThicknessInput->setSpecialValueText(QStringLiteral("未设置"));
     m_wallThicknessInput->setToolTip(QStringLiteral(
         "默认取圆角半径，手动修改后保留；输入 0 可恢复默认值。内截面尺寸为外尺寸减去两倍壁厚，内圆角半径不小于 0；厚度须小于 Y 长、Z 宽的一半。用于两条内壁参考走线及导出时的加工断面修正。"));
-    m_laserWallImpactVisibleCheckBox = new QCheckBox(QStringLiteral("激光内壁作用线（绿色）"), statusGroup);
-    m_laserWallImpactVisibleCheckBox->setObjectName(QStringLiteral("laserWallImpactVisible"));
-    m_laserWallImpactVisibleCheckBox->setChecked(true);
-    m_laserWallImpactVisibleCheckBox->setToolTip(QStringLiteral(
-        "先按四轴姿态和 Z 修正求候选点，再将 YZ 位置投到内截面轮廓；内圆角归零时补齐直角转折。仅是投影预览，不是激光射线与材料的完整求交仿真。"));
-    m_expectedSurfaceVisibleCheckBox = new QCheckBox(QStringLiteral("期望断面内侧走线（紫色）"), statusGroup);
-    m_expectedSurfaceVisibleCheckBox->setObjectName(QStringLiteral("expectedSurfaceVisible"));
-    m_expectedSurfaceVisibleCheckBox->setChecked(true);
-    m_expectedSurfaceVisibleCheckBox->setToolTip(QStringLiteral(
-        "与绿色作用线投影到相同内轮廓，由圆角推断的局部断面方向求 X，直角处也补入转折点；曲线边保留自身形状。边两端方向不一致时报错。两条走线还受加工标记和加工断面标记总开关控制。"));
-    m_endCutPreviewStatusValue = createStatusValue(statusGroup);
-    m_endCutPreviewStatusValue->setObjectName(QStringLiteral("endCutPreviewStatus"));
-    m_endCutPreviewStatusValue->setWordWrap(true);
-    m_applyManualSectionButton = new QPushButton(QStringLiteral("应用手动截面"), statusGroup);
+    m_applyManualSectionButton = new QPushButton(QStringLiteral("应用手动截面"), parametersGroup);
     m_applyManualSectionButton->setToolTip
         (QStringLiteral("手动设置优先用于后续内部线识别、加工断面、排序和导出。"));
-    m_applySectionCenterButton = new QPushButton(QStringLiteral("应用截面中心"), statusGroup);
+    m_applySectionCenterButton = new QPushButton(QStringLiteral("应用截面中心"), parametersGroup);
     m_applySectionCenterButton->setToolTip(QStringLiteral(
         "把上方 Y、Z 输入作为方管截面中心，优先于自动识别中心。"));
-    m_clearSectionCenterButton = new QPushButton(QStringLiteral("清除截面中心"), statusGroup);
+    m_clearSectionCenterButton = new QPushButton(QStringLiteral("清除截面中心"), parametersGroup);
     m_clearSectionCenterButton->setToolTip(QStringLiteral(
         "恢复自动识别中心；没有自动识别结果时使用默认 (0,0)。"));
+    QHBoxLayout* sectionButtonLayout = new QHBoxLayout;
+    sectionButtonLayout->setContentsMargins(0, 0, 0, 0);
+    sectionButtonLayout->addWidget(m_applyManualSectionButton);
     QHBoxLayout* centerButtonLayout = new QHBoxLayout;
     centerButtonLayout->setContentsMargins(0, 0, 0, 0);
     centerButtonLayout->addWidget(m_applySectionCenterButton);
     centerButtonLayout->addWidget(m_clearSectionCenterButton);
-    m_roundedCornerCountValue = createStatusValue(statusGroup);
-    m_centerLineValue = createStatusValue(statusGroup);
-    m_rotaryEndCutCountValue = createStatusValue(statusGroup);
-    statusLayout->addRow(QStringLiteral("截面状态："), m_sectionStatusValue);
-    statusLayout->addRow(QStringLiteral("Y 长："), m_yLengthInput);
-    statusLayout->addRow(QStringLiteral("Z 宽："), m_zWidthInput);
-    statusLayout->addRow(QStringLiteral("圆角半径："), m_cornerRadiusInput);
-    statusLayout->addRow(QStringLiteral("截面中心 Y："), m_centerYInput);
-    statusLayout->addRow(QStringLiteral("截面中心 Z："), m_centerZInput);
-    statusLayout->addRow(QString(), centerButtonLayout);
-    statusLayout->addRow(QStringLiteral("方管厚度："), m_wallThicknessInput);
-    auto* positiveCorrection = new QCheckBox(QStringLiteral("加工断面正向修正（+X）"), statusGroup);
+    parametersForm->addRow(QStringLiteral("Y 长："), m_yLengthInput);
+    parametersForm->addRow(QStringLiteral("Z 宽："), m_zWidthInput);
+    parametersForm->addRow(QStringLiteral("圆角半径："), m_cornerRadiusInput);
+    parametersForm->addRow(QStringLiteral("截面中心 Y："), m_centerYInput);
+    parametersForm->addRow(QStringLiteral("截面中心 Z："), m_centerZInput);
+    parametersForm->addRow(QStringLiteral("方管厚度："), m_wallThicknessInput);
+    parametersForm->addRow(QString(), sectionButtonLayout);
+    parametersForm->addRow(QString(), centerButtonLayout);
+    parametersLayout->addLayout(parametersForm);
+    statusGroupLayout->addWidget(parametersGroup);
+
+    QGroupBox* stateGroup = new QGroupBox(QStringLiteral("识别状态"), statusGroup);
+    QFormLayout* stateLayout = new QFormLayout(stateGroup);
+    stateLayout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    m_sectionStatusValue = createStatusValue(stateGroup);
+    m_roundedCornerCountValue = createStatusValue(stateGroup);
+    m_centerLineValue = createStatusValue(stateGroup);
+    m_endCutPreviewStatusValue = createStatusValue(stateGroup);
+    m_endCutPreviewStatusValue->setObjectName(QStringLiteral("endCutPreviewStatus"));
+    m_endCutPreviewStatusValue->setWordWrap(true);
+    m_rotaryEndCutCountValue = createStatusValue(stateGroup);
+    m_laserWallImpactVisibleCheckBox = new QCheckBox(QStringLiteral("激光内壁作用线（绿色）"), stateGroup);
+    m_laserWallImpactVisibleCheckBox->setObjectName(QStringLiteral("laserWallImpactVisible"));
+    m_laserWallImpactVisibleCheckBox->setChecked(true);
+    m_laserWallImpactVisibleCheckBox->setToolTip(QStringLiteral(
+        "先按四轴姿态和 Z 修正求候选点，再将 YZ 位置投到内截面轮廓；内圆角归零时补齐直角转折。仅是投影预览，不是激光射线与材料的完整求交仿真。"));
+    m_expectedSurfaceVisibleCheckBox = new QCheckBox(QStringLiteral("期望断面内侧走线（紫色）"), stateGroup);
+    m_expectedSurfaceVisibleCheckBox->setObjectName(QStringLiteral("expectedSurfaceVisible"));
+    m_expectedSurfaceVisibleCheckBox->setChecked(true);
+    m_expectedSurfaceVisibleCheckBox->setToolTip(QStringLiteral(
+        "与绿色作用线投影到相同内轮廓，由圆角推断的局部断面方向求 X，直角处也补入转折点；曲线边保留自身形状。边两端方向不一致时报错。两条走线还受加工标记和加工断面标记总开关控制。"));
+    auto* positiveCorrection = new QCheckBox(QStringLiteral("加工断面正向修正（+X）"), stateGroup);
     positiveCorrection->setObjectName(QStringLiteral("cutSurfacePositiveCorrection"));
     positiveCorrection->setToolTip(QStringLiteral("生成四轴 G 代码时，仅当期望点 X 大于内壁作用点 X，沿 +X 补足差值。默认关闭。"));
-    auto* negativeCorrection = new QCheckBox(QStringLiteral("加工断面反向修正（−X）"), statusGroup);
+    auto* negativeCorrection = new QCheckBox(QStringLiteral("加工断面反向修正（−X）"), stateGroup);
     negativeCorrection->setObjectName(QStringLiteral("cutSurfaceNegativeCorrection"));
     negativeCorrection->setToolTip(QStringLiteral("生成四轴 G 代码时，仅当期望点 X 小于内壁作用点 X，沿 −X 补足差值。可与正向同时开启；显示开关不影响此工艺。"));
-    statusLayout->addRow(QString(), positiveCorrection);
-    statusLayout->addRow(QString(), negativeCorrection);
     connect(positiveCorrection, &QCheckBox::toggled,
         this, &MachiningSettingsWidget::cutSurfacePositiveCorrectionChanged);
     connect(negativeCorrection, &QCheckBox::toggled,
         this, &MachiningSettingsWidget::cutSurfaceNegativeCorrectionChanged);
-    statusLayout->addRow(QString(), m_laserWallImpactVisibleCheckBox);
-    statusLayout->addRow(QString(), m_expectedSurfaceVisibleCheckBox);
-    statusLayout->addRow(QStringLiteral("走线状态："), m_endCutPreviewStatusValue);
-    statusLayout->addRow(QString(), m_applyManualSectionButton);
-    statusLayout->addRow(QStringLiteral("圆角数量："), m_roundedCornerCountValue);
-    statusLayout->addRow(QStringLiteral("中心线位置："), m_centerLineValue);
-    statusLayout->addRow(QStringLiteral("加工断面："), m_rotaryEndCutCountValue);
+    stateLayout->addRow(QStringLiteral("截面状态："), m_sectionStatusValue);
+    stateLayout->addRow(QStringLiteral("圆角数量："), m_roundedCornerCountValue);
+    stateLayout->addRow(QStringLiteral("中心线位置："), m_centerLineValue);
+    stateLayout->addRow(QStringLiteral("走线状态："), m_endCutPreviewStatusValue);
+    stateLayout->addRow(QString(), positiveCorrection);
+    stateLayout->addRow(QString(), negativeCorrection);
+    stateLayout->addRow(QString(), m_laserWallImpactVisibleCheckBox);
+    stateLayout->addRow(QString(), m_expectedSurfaceVisibleCheckBox);
+    stateLayout->addRow(QStringLiteral("加工断面："), m_rotaryEndCutCountValue);
+    statusGroupLayout->addWidget(stateGroup);
     contentLayout->addWidget(statusGroup);
     contentLayout->addStretch(1);
     scrollArea->setWidget(content);
@@ -299,10 +470,13 @@ void MachiningSettingsWidget::setRotaryTubeSectionProperties
 {
     m_updatingUi = true;
     m_sectionRecognized = recognized;
+    m_sectionManuallyConfigured = manuallyConfigured;
     m_sectionBlinkVisible = true;
     m_sectionStatusValue->setText(recognized
         ? (manuallyConfigured ? QStringLiteral("已手动设置") : QStringLiteral("已识别"))
         : QStringLiteral("未识别"));
+    m_sectionDiagram->setSection(recognized, yLength, zWidth, cornerRadius,
+        centerY, centerZ, centerUserSpecified);
     m_centerYInput->setValue(centerY);
     m_centerZInput->setValue(centerZ);
     m_centerLineValue->setText(centerUserSpecified
@@ -375,7 +549,9 @@ void MachiningSettingsWidget::refreshSectionStatusStyle()
 {
     if (m_sectionRecognized)
     {
-        m_sectionStatusValue->setStyleSheet(QString());
+        m_sectionStatusValue->setStyleSheet(m_sectionManuallyConfigured
+            ? QStringLiteral("color: #1565c0; font-weight: 600;")
+            : QStringLiteral("color: #2e7d32; font-weight: 600;"));
         return;
     }
 

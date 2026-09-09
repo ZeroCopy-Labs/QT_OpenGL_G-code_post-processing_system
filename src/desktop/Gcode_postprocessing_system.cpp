@@ -547,7 +547,9 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
     QAction* assignRotaryEndCutAction = new QAction(QStringLiteral("指定为加工断面"), this);
     QAction* assignWasteRotaryEndCutAction = new QAction(QStringLiteral("指定为废面"), this);
     QAction* recognizeRotaryTubeSectionAction = new QAction(QStringLiteral("识别方管垂直截面（外轮廓）"), this);
+    QAction* applyManualSectionAction = new QAction(QStringLiteral("应用手动截面..."), this);
     QAction* removeInternalPathsAction = new QAction(QStringLiteral("清理内部线条"), this);
+    QAction* recognizeAllRotaryEndCutsAction = new QAction(QStringLiteral("识别所有断面"), this);
     QAction* clearSelectedRotaryEndCutAssignmentsAction = new QAction(QStringLiteral("清除选中加工断面指定"), this);
     QAction* clearRotaryEndCutAssignmentsAction = new QAction(QStringLiteral("清除全部加工断面指定"), this);
 
@@ -564,14 +566,26 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
     ui->menuEdit->addAction(joinAction);
     ui->menuEdit->addAction(filletAction);
     ui->menuEdit->addAction(chamferAction);
-    ui->menuSort->addSeparator();
-    ui->menuSort->addAction(assignRotaryEndCutAction);
-    ui->menuSort->addAction(assignWasteRotaryEndCutAction);
-    ui->menuSort->addSeparator();
-    ui->menuSort->addAction(recognizeRotaryTubeSectionAction);
-    ui->menuSort->addAction(removeInternalPathsAction);
-    ui->menuSort->addAction(clearSelectedRotaryEndCutAssignmentsAction);
-    ui->menuSort->addAction(clearRotaryEndCutAssignmentsAction);
+
+    // 独立“机加工”菜单：按方管四轴工作流顺序分组（截面 → 内部线 → 加工断面 → 排序 → 导出）。
+    QMenu* machiningMenu = new QMenu(QStringLiteral("机加工"), this);
+    menuBar()->insertMenu(ui->menuSort->menuAction(), machiningMenu);
+    machiningMenu->addSection(QStringLiteral("截面"));
+    machiningMenu->addAction(recognizeRotaryTubeSectionAction);
+    machiningMenu->addAction(applyManualSectionAction);
+    machiningMenu->addSection(QStringLiteral("内部线"));
+    machiningMenu->addAction(removeInternalPathsAction);
+    machiningMenu->addSection(QStringLiteral("加工断面"));
+    machiningMenu->addAction(assignRotaryEndCutAction);
+    machiningMenu->addAction(assignWasteRotaryEndCutAction);
+    machiningMenu->addAction(recognizeAllRotaryEndCutsAction);
+    machiningMenu->addAction(clearSelectedRotaryEndCutAssignmentsAction);
+    machiningMenu->addAction(clearRotaryEndCutAssignmentsAction);
+    machiningMenu->addSection(QStringLiteral("排序"));
+    machiningMenu->addAction(ui->action_Sort_2D_Assign);
+    machiningMenu->addAction(ui->action_Sort_2D_Smart);
+    machiningMenu->addSection(QStringLiteral("导出"));
+    machiningMenu->addAction(ui->action_File_Export_G);
 
     ui->action_File_Export_G->setText(QStringLiteral("导出G代码"));
 
@@ -592,7 +606,20 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
     connect(assignRotaryEndCutAction, &QAction::triggered, this, [this]() { smartAssignSelectedRotaryEndCut(); });
     connect(assignWasteRotaryEndCutAction, &QAction::triggered, this, [this]() { assignSelectedWasteEndCut(); });
     connect(recognizeRotaryTubeSectionAction, &QAction::triggered, this, [this]() { recognizeRotaryTubeSection(); });
+    connect(applyManualSectionAction, &QAction::triggered, this, [this]()
+    {
+        if (m_machiningSettingsDock != nullptr)
+        {
+            m_machiningSettingsDock->show();
+            m_machiningSettingsDock->raise();
+        }
+        const QString message =
+            QStringLiteral("请在右侧加工设置面板输入 Y 长、Z 宽、圆角半径和截面中心后应用。");
+        ui->openGLWidget->appendCommandMessage(message);
+        statusBar()->showMessage(message, 5000);
+    });
     connect(removeInternalPathsAction, &QAction::triggered, this, [this]() { removeInternalMachiningPaths(); });
+    connect(recognizeAllRotaryEndCutsAction, &QAction::triggered, this, [this]() { recognizeAllRotaryEndCuts(); });
     connect(clearSelectedRotaryEndCutAssignmentsAction, &QAction::triggered, this, [this]() { clearSelectedRotaryEndCutAssignments(); });
     connect(clearRotaryEndCutAssignmentsAction, &QAction::triggered, this, [this]() { clearRotaryEndCutAssignments(); });
     connect(ui->action_Sort_2D_Assign, &QAction::triggered, this, [this]()
