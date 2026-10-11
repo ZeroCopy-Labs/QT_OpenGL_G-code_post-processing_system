@@ -36,6 +36,12 @@ int main(int argc, char** argv)
     }
     try
     {
+        // 启动准入依赖该判定：测试目录没有 license.dat，必须判为未授权且给出状态说明。
+        const AppLicense unlicensed = AppLicense::load();
+        if (unlicensed.isValid() || unlicensed.statusText().trimmed().isEmpty())
+        {
+            throw std::runtime_error("license gate: 无 license.dat 时应判为未授权并给出状态说明");
+        }
         cutSurfaceCorrectionFlowTests();
         boundaryMinimumXOrderTests();
         toolTransferTests();

@@ -85,7 +85,15 @@ x64/Release/
 
 `-SkipBuild` 可跳过构建直接运行。套件为 `CutSurfacePreviewTests` 与 `TubeWallThicknessFlowTests`；测试会把应用设置隔离到 `x64/test-temp/` 下的临时目录，不会读写用户真实设置（隔离失效会直接报错）。
 
-## 5. 文档导航
+## 5. 运行与授权
+
+程序启动时校验 `license.dat`（位于 `G-code_post-processing_system.exe` 同目录）：
+
+- 需要有效授权才能进入主界面；没有有效授权时启动即弹出“需要授权”提示（含授权状态、机器码和程序目录），关闭后程序退出；
+- 申请授权：执行 `G-code_post-processing_system.exe --license-request` 在程序目录生成 `机器码.txt`，把机器码交给软件提供方换取 `license.dat`；该命令在没有授权时同样可用；
+- 本地开发/验证可用 `tools/Generate-License.ps1 -MachineId <机器码> -OutputPath "x64\Release\license.dat"` 生成授权文件（内部使用，勿外发）。
+
+## 6. 文档导航
 
 - [文档入口](./docs/index.md)
 - [用户指南](./docs/user-guide/index.md)
