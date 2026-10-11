@@ -528,7 +528,7 @@ namespace cadcam::planning
                 : traversal->entities.size() == 1U
                     ? ProcessGroupKind::SingleEntity : ProcessGroupKind::ConnectedChain;
             plan.groups.push_back
-                ({ firstProcessOrder, groupKind, traversal->closed,
+                ({ firstProcessOrder, groupKind, traversal->closed, -1,
                     unit.orderedMemberEntityIds });
             current = traversal->entities.back().exit;
 

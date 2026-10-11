@@ -13,6 +13,7 @@ Viewer 不拥有加工单元身份、加工单元序列或计划事实。
 - `CadViewer::renderProcessOrderLabels()` 构建并绘制当前加工顺序标签。
 - 标签命中和点击由 `CadViewer_ProcessOrderLabels.cpp` 处理。
 - Ctrl 单击标签时，Viewer 向 Application 上报当前选中单元键和目标单元键；Viewer 本身不修改加工单元序列。
+- 右键命中加工单元标签或箭头时，Viewer 先按普通单击选中该单元，再上报单元键和屏幕坐标；主窗口据此提供加工断面端面语义菜单。
 
 ## 输入与输出
 

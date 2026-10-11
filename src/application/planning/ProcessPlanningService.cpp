@@ -36,6 +36,54 @@ namespace
         QString status = QStringLiteral("Success");
     };
 
+    // 加工断面的端面归属在规划阶段统一判定，供轨迹修正与界面展示共用同一结果。
+    void applyEndCutSides
+    (
+        const cadcam::planning::ProcessPlanningInput& input,
+        ProcessPlan& plan
+    )
+    {
+        struct BoundaryAccumulator
+        {
+            double minimumX = std::numeric_limits<double>::max();
+            std::optional<cadcam::planning::EndCutSide> explicitSide;
+        };
+
+        std::map<int, BoundaryAccumulator> byPairId;
+        for (const cadcam::planning::PlanningEntity& entity : input.entities)
+        {
+            if (entity.boundaryRole != cadcam::planning::BoundaryRole::Break
+                || entity.boundaryPairId < 0)
+            {
+                continue;
+            }
+
+            BoundaryAccumulator& accumulator = byPairId[entity.boundaryPairId];
+            for (const cadcam::geometry::PathVertex3D& vertex : entity.path.vertices)
+            {
+                accumulator.minimumX = std::min(accumulator.minimumX, vertex.position.x);
+            }
+            if (entity.endCutSide.has_value() && !accumulator.explicitSide.has_value())
+            {
+                accumulator.explicitSide = entity.endCutSide;
+            }
+        }
+
+        std::vector<cadcam::planning::EndCutSideBoundary> boundaries;
+        boundaries.reserve(byPairId.size());
+        for (const auto& [pairId, accumulator] : byPairId)
+        {
+            cadcam::planning::EndCutSideBoundary boundary;
+            boundary.boundaryPairId = pairId;
+            boundary.minimumX = std::isfinite(accumulator.minimumX)
+                ? accumulator.minimumX : 0.0;
+            boundary.explicitSide = accumulator.explicitSide;
+            boundaries.push_back(boundary);
+        }
+
+        plan.endCutSides = cadcam::planning::resolveEndCutSides(std::move(boundaries));
+    }
+
     bool satisfiesPrecedenceConstraints(const ProcessPlan& plan)
     {
         std::map<EntityId, int> orderByEntity;
@@ -1180,6 +1228,10 @@ OperationResult<cadcam::planning::ProcessPlan> ProcessPlanningService::buildRota
     logEntrySelectionSummaries(result.diagnostics);
     logZone16SweepPlanningSummaries(result.diagnostics);
     result.mergeDiagnostics(capture.diagnostics);
+    if (result.succeeded() && result.value.has_value())
+    {
+        applyEndCutSides(*capture.value, *result.value);
+    }
     if (result.succeeded() && result.value.has_value()
         && policy.sortIntent == cadcam::planning::ProcessSortIntent::PreserveCurrentSequence
         && (!preserveCurrentUnitSequence(*result.value, processState.processUnitSequence())

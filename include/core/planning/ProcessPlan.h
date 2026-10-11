@@ -27,6 +27,8 @@ namespace cadcam::planning
     enum class PerimeterSweepDirection { Clockwise, CounterClockwise };
     enum class LongitudinalSweepDirection { PositiveX, NegativeX };
     enum class BoundaryRole { None, Break, Waste };
+    // 加工断面的端面语义。未设置时由 X 方向的断面顺序自动判定。
+    enum class EndCutSide { Section, Left, Right };
     enum class ProcessGroupKind { SingleEntity, ConnectedChain, ClosedLoop, BreakBoundary, WasteBoundary };
     enum class ProcessExclusionReason { Hidden, UserDisabled, WasteRegion, UnsupportedGeometry, InvalidPath };
     enum class BoundarySide { Left, OnBoundary, Right, Mixed, Indeterminate };
@@ -112,6 +114,7 @@ namespace cadcam::planning
         bool processEnabled = true;
         BoundaryRole boundaryRole = BoundaryRole::None;
         int boundaryPairId = -1;
+        std::optional<EndCutSide> endCutSide;
         process::DirectionPreference directionPreference = process::DirectionPreference::Auto;
         std::optional<double> startParameter;
         process::DirectionPreference manualDirectionPreference =
@@ -169,6 +172,7 @@ namespace cadcam::planning
         int groupId = -1;
         ProcessGroupKind kind = ProcessGroupKind::SingleEntity;
         bool closed = false;
+        int boundaryPairId = -1;
         std::vector<geometry::EntityId> entityIds;
     };
 
@@ -185,6 +189,66 @@ namespace cadcam::planning
         int boundaryPairId = -1;
     };
 
+    struct EndCutSideBoundary
+    {
+        int boundaryPairId = -1;
+        double minimumX = 0.0;
+        std::optional<EndCutSide> explicitSide;
+    };
+
+    struct EndCutSideAssignment
+    {
+        int boundaryPairId = -1;
+        EndCutSide side = EndCutSide::Section;
+        bool userSpecified = false;
+    };
+
+    // 断面端面归属的唯一判定入口：按最小 X 升序交替分配左/右端面。
+    // 显式指定作为新的交替基准，只影响其 +X 方向的断面；显式“断面”不参与交替，也不改变基准。
+    inline std::vector<EndCutSideAssignment> resolveEndCutSides
+        (std::vector<EndCutSideBoundary> boundaries)
+    {
+        std::stable_sort(boundaries.begin(), boundaries.end(),
+            [](const EndCutSideBoundary& left, const EndCutSideBoundary& right)
+            {
+                if (left.minimumX != right.minimumX)
+                {
+                    return left.minimumX < right.minimumX;
+                }
+                return left.boundaryPairId < right.boundaryPairId;
+            });
+
+        std::vector<EndCutSideAssignment> assignments;
+        assignments.reserve(boundaries.size());
+        EndCutSide nextAutomaticSide = EndCutSide::Left;
+        for (const EndCutSideBoundary& boundary : boundaries)
+        {
+            EndCutSideAssignment assignment;
+            assignment.boundaryPairId = boundary.boundaryPairId;
+            if (boundary.explicitSide.has_value())
+            {
+                assignment.side = *boundary.explicitSide;
+                assignment.userSpecified = true;
+                if (assignment.side == EndCutSide::Left)
+                {
+                    nextAutomaticSide = EndCutSide::Right;
+                }
+                else if (assignment.side == EndCutSide::Right)
+                {
+                    nextAutomaticSide = EndCutSide::Left;
+                }
+            }
+            else
+            {
+                assignment.side = nextAutomaticSide;
+                nextAutomaticSide = nextAutomaticSide == EndCutSide::Left
+                    ? EndCutSide::Right : EndCutSide::Left;
+            }
+            assignments.push_back(assignment);
+        }
+        return assignments;
+    }
+
     struct ProcessPlan
     {
         std::uint64_t contentRevision = 0;
@@ -198,6 +262,8 @@ namespace cadcam::planning
         std::vector<ProcessGroup> groups;
         std::vector<ProcessExclusion> exclusions;
         std::vector<ProcessPrecedence> precedenceConstraints;
+        // 加工断面的端面归属，由规划阶段统一判定，供轨迹修正与界面展示共用。
+        std::vector<EndCutSideAssignment> endCutSides;
     };
 
     inline bool validProcessUnitKey(const ProcessUnitKey& key)

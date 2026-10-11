@@ -91,6 +91,23 @@ namespace cadcam::process
         EntityProcessState state = stateOrDefault(id);
         state.overrideData.boundaryRole = role;
         state.overrideData.boundaryPairId = pairId;
+        state.overrideData.endCutSide.reset();
+        return store(id, state);
+    }
+
+    bool DocumentProcessState::setEndCutSide
+    (
+        geometry::EntityId id,
+        std::optional<planning::EndCutSide> side
+    )
+    {
+        EntityProcessState state = stateOrDefault(id);
+        if (state.overrideData.boundaryRole != planning::BoundaryRole::Break
+            || state.overrideData.boundaryPairId < 0)
+        {
+            return false;
+        }
+        state.overrideData.endCutSide = side;
         return store(id, state);
     }
 
@@ -163,6 +180,8 @@ namespace cadcam::process
                 && state.overrideData.boundaryPairId < 0)
             || (state.overrideData.startParameter.has_value()
                 && !std::isfinite(*state.overrideData.startParameter))) return false;
+        if (state.overrideData.boundaryRole != planning::BoundaryRole::Break
+            && state.overrideData.endCutSide.has_value()) return false;
         return store(id, state);
     }
 

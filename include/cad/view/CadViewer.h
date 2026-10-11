@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // CadViewer 头文件
 // 声明 CadViewer 模块，对外暴露当前组件的核心类型、接口和协作边界。
@@ -329,6 +329,13 @@ signals:
     );
     void processUnitReverseRequested(cadcam::planning::ProcessUnitKey unitKey);
 
+    // 右键命中加工单元标签或箭头时上报，主窗口据此提供加工断面端面语义设置。
+    void processUnitContextMenuRequested
+    (
+        cadcam::planning::ProcessUnitKey unitKey,
+        const QPoint& globalPos
+    );
+
 protected:
     // OpenGL 初始化，在窗口第一次显示时调用
     void initializeGL() override;
@@ -466,6 +473,10 @@ private:
 
     // 处理加工顺序标签双击。
     bool handleProcessUnitDirectionDoubleClick(const QPoint& screenPos);
+
+    // 处理加工单元标签或箭头的右键，命中时上报单元键供主窗口创建端面语义菜单。
+    bool handleProcessUnitContextMenuPress
+        (const QPoint& screenPos, const QPoint& globalPos);
 
     // 绘制选中/框选候选图元的叠加高亮（AutoCAD 风格）。
     void renderEntitySelectionOverlays();

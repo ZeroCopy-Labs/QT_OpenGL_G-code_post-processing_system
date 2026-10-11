@@ -550,6 +550,26 @@ bool CadViewer::handleProcessOrderLabelClick
     return true;
 }
 
+bool CadViewer::handleProcessUnitContextMenuPress
+    (const QPoint& screenPos, const QPoint& globalPos)
+{
+    ProcessOrderLabelOverlay clickedLabel;
+    if (hitTestProcessOrderLabel(screenPos, &clickedLabel))
+    {
+        handleProcessOrderLabelClick(screenPos, Qt::NoModifier);
+        emit processUnitContextMenuRequested(clickedLabel.unitKey, globalPos);
+        return true;
+    }
+
+    ProcessUnitArrowOverlay clickedArrow;
+    if (hitTestProcessUnitArrow(screenPos, &clickedArrow))
+    {
+        emit processUnitContextMenuRequested(clickedArrow.unitKey, globalPos);
+        return true;
+    }
+    return false;
+}
+
 bool CadViewer::handleProcessUnitDirectionDoubleClick(const QPoint& screenPos)
 {
     ProcessOrderLabelOverlay clickedLabel;

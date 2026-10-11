@@ -234,15 +234,15 @@ void CadViewer::rebuildRotaryEndCutPreviewPaths()
         const auto& boundary = entry.second;
         if (!boundary.complete)
         {
-            messages.push_back(QStringLiteral("断面 %1：路径采样或刀头姿态解算失败。")
-                .arg(entry.first));
+            messages.push_back(QStringLiteral("断面 断%1：路径采样或刀头姿态解算失败。")
+                .arg(entry.first + 1));
             continue;
         }
         const auto expected = cadcam::machining::CutSurfaceExpectation::build
             (*m_rotaryEndCutPreviewSection, boundary.sources, boundary.endpoints);
         if (!expected.errorMessage.isEmpty())
         {
-            messages.push_back(QStringLiteral("断面 %1：%2").arg(entry.first).arg(expected.errorMessage));
+            messages.push_back(QStringLiteral("断面 断%1：%2").arg(entry.first + 1).arg(expected.errorMessage));
             continue;
         }
         for (const auto& path : expected.paths)

@@ -39,7 +39,9 @@
 - `TubeZone16` 与 `TubeZoneMask`：按顺时针定义顶面、右上圆角、右面、右下圆角、底面、左下圆角、左面、左上圆角及八条相邻分界母线。
 - `ProcessUnitZoneProfile`：记录一个最终加工单元经过的全部截面区位和各区位 X 范围；规划器另行生成可执行入口区位画像，避免把“经过区位”当成“可从该区位起刀”。
 - `ZoneSweepOwnership`：在单个加工分区启动时冻结普通加工单元的唯一 `ownerZone`，仅用于本次计划构建的生产分桶。
-- `ProcessPlan`：保存模式、排序策略、revision、加工单元、单元序列、分组、约束、逐图元分配和排除项。
+- `ProcessPlan`：保存模式、排序策略、revision、加工单元、单元序列、分组、约束、逐图元分配、排除项和按断面汇总的端面归属。
+- `EndCutSideBoundary` 与 `EndCutSideAssignment`：断面端面判定的输入与输出值对象，按断面编号记录最小 X、手动端面和判定结论。
+- `resolveEndCutSides()`：断面端面归属的唯一判定入口，按最小 X 升序交替分配左右端面，手动指定作为新的交替基准。
 
 ## 当前生产数据流
 
@@ -179,6 +181,7 @@ Application 的 `DocumentProcessState` 持有当前 `ProcessUnitSequence`。Core
 ## 关键业务规则
 
 - 不可见、未启用和不支持的图元在规划输入或计划中排除；内部线自动清理直接删除窗口内图元，不产生排除状态。
+- 四轴规划成功后由规划服务汇总各 Break 断面的最小 X 和手动端面，调用 `resolveEndCutSides()` 判定端面归属并写入 `ProcessPlan::endCutSides`；`ProcessGroup` 同步保存断面编号，供界面把端面归属映射到加工单元编号。
 - 四轴普通加工单元的连通分量只在最终可加工实体子集内建立；Waste 图元不参与普通单元的邻接传播。
 - Waste 断面本身及其定义的废弃区间不进入加工分配。
 - Break 断面形成独立加工组和前后工艺约束。

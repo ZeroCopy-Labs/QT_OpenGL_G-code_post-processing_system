@@ -85,6 +85,30 @@ inline void boundaryMinimumXOrderTests()
                 std::cerr << diagnostic.userMessage.toStdString() << '\n';
             throw std::runtime_error("minimum-X sorted plan could not export G-code");
         }
+
+        // 端面归属由规划阶段判定：两个断面按最小 X 依次为左端面、右端面。
+        if (result.value->endCutSides.size() != 2U)
+            throw std::runtime_error("end-cut side assignment missing from plan");
+        const auto sideOf = [&result](int pairId)
+        {
+            for (const auto& assignment : result.value->endCutSides)
+                if (assignment.boundaryPairId == pairId) return assignment.side;
+            throw std::runtime_error("end-cut side assignment missing for boundary");
+        };
+        if (sideOf(first) != planning::EndCutSide::Left
+            || sideOf(1 - first) != planning::EndCutSide::Right)
+            throw std::runtime_error("end-cut side alternation wrong for minimum-X order");
+
+        // 两个端面修正开关同时开启时仍应导出成功：左端面只补正向差值（+X）、右端面只补负向差值（−X）。
+        generator.setCutSurfaceCorrection(6.0, true, true);
+        const auto correctedProgram = generator.buildProgramText({});
+        if (!correctedProgram.succeeded() || !correctedProgram.value.has_value()
+            || correctedProgram.value->isEmpty())
+        {
+            for (const auto& diagnostic : correctedProgram.diagnostics)
+                std::cerr << diagnostic.userMessage.toStdString() << '\n';
+            throw std::runtime_error("end-cut corrected export failed");
+        }
     }
     std::cout << "PASS: crossing boundaries sorted by minimum X, stable equal minima and G-code export.\n";
 }
@@ -139,10 +163,15 @@ inline void cutSurfaceCorrectionFlowTests()
     }
     plan.processUnits.push_back(unit);
     plan.processUnitSequence.units.push_back(unit.key);
-    plan.groups.push_back({ 0, planning::ProcessGroupKind::BreakBoundary, true, unit.orderedMemberEntityIds });
+    plan.groups.push_back({ 0, planning::ProcessGroupKind::BreakBoundary, true, 0, unit.orderedMemberEntityIds });
     plan.contentRevision = document.contentRevision();
     section.contentRevision = plan.contentRevision;
     plan.processStateRevision = state.revision();
+    planning::EndCutSideAssignment endCutSide;
+    endCutSide.boundaryPairId = 0;
+    endCutSide.side = planning::EndCutSide::Left;
+    endCutSide.userSpecified = true;
+    plan.endCutSides.push_back(endCutSide);
     GProfile profile;
     GProfileRotaryAxisConfig rotary = profile.rotaryAxisConfig();
     rotary.machiningPlaneZOffset = 1.25;
@@ -185,7 +214,8 @@ inline void cutSurfaceCorrectionFlowTests()
                 check(inner.has_value());
                 const auto& p = source.vertices[j].position;
                 const double delta = 0.7 * (inner->x - p.y) - 0.4 * (inner->y - p.z);
-                const double x = p.x + (((positive && delta > 0) || (negative && delta < 0)) ? delta : 0);
+                // 该断面判定为左端面：只补正向差值（向 +X），即只有正向修正开关生效。
+                const double x = p.x + ((positive && delta > 0) ? delta : 0);
                 near(entity.sourcePath[j].x, x);
                 if (j == 1) near(entity.cuttingMoves.back().target.x, x);
             }
@@ -199,9 +229,15 @@ inline void cutSurfaceCorrectionFlowTests()
         check(program.succeeded() && program.value.has_value() && !program.value->isEmpty());
         programs[mode] = *program.value;
     }
-    check(programs[0] != programs[1] && programs[0] != programs[2] && programs[1] != programs[3]);
+    // 左端面只补正向差值：反向修正开关单独开启不产生任何变化。
+    check(programs[0] == programs[2] && programs[1] == programs[3] && programs[0] != programs[1]);
     generator.setCutSurfaceCorrection(6.0, false, false);
     check(generator.buildProgramText({}).value == std::optional<QString>(programs[0]));
+    // 手动“断面”不做任何修正：两个开关同时开启也与全关一致。
+    plan.endCutSides[0].side = planning::EndCutSide::Section;
+    generator.setCutSurfaceCorrection(6.0, true, true);
+    check(generator.buildProgramText({}).value == std::optional<QString>(programs[0]));
+    plan.endCutSides[0].side = planning::EndCutSide::Left;
     generator.setCutSurfaceCorrection(30.0, true, true);
     check(!generator.buildProgramText({}).succeeded());
     // 取消断面标记：普通加工单元不受修正影响，即使壁厚无效也不使用该工艺。

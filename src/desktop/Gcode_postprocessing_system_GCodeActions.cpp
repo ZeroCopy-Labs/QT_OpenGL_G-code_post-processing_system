@@ -49,6 +49,33 @@ namespace
         return diagnostic;
     }
 
+    // 输出文件打不开（安全软件拦截、只读、被占用、目录不存在等）时用于引导用户改存其他位置。
+    bool isOutputOpenFailure(const OperationReport& report)
+    {
+        for (const Diagnostic& diagnostic : report.diagnostics)
+        {
+            if (diagnostic.code == DiagnosticCode::FileOpenFailure
+                && diagnostic.severity == DiagnosticSeverity::Error)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    QString outputFailureReason(const OperationReport& report)
+    {
+        for (const Diagnostic& diagnostic : report.diagnostics)
+        {
+            if (diagnostic.code == DiagnosticCode::FileOpenFailure)
+            {
+                return diagnostic.technicalDetail.trimmed().isEmpty()
+                    ? diagnostic.userMessage.trimmed() : diagnostic.technicalDetail.trimmed();
+            }
+        }
+        return QStringLiteral("未知原因");
+    }
+
     qint64 quantizeDedupValue(double value)
     {
         const qint64 quantized = static_cast<qint64>(std::llround(value / kDedupTolerance));
@@ -672,12 +699,58 @@ bool Gcode_postprocessing_system::exportGCode
         return false;
     }
 
-    const OperationReport writeResult = generator.writeProgramText
+    OperationReport writeResult = generator.writeProgramText
     (
         resolvedExportPath,
         *buildResult.value,
         context
     );
+    // 目标位置打不开（如安全软件拦截、只读、被占用）时，让用户直接另选保存位置后重试一次。
+    if (!writeResult.succeeded() && isOutputOpenFailure(writeResult))
+    {
+        const QString reason = outputFailureReason(writeResult);
+        const QMessageBox::StandardButton chooseAnother = QMessageBox::question
+        (
+            this,
+            QStringLiteral("无法写入目标位置"),
+            QStringLiteral("无法写入：\n%1\n\n原因：%2\n\n是否改为选择其他保存位置？该位置会记为下次的默认导出目录。")
+                .arg(QDir::toNativeSeparators(resolvedExportPath), reason),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::Yes
+        );
+
+        if (chooseAnother == QMessageBox::Yes)
+        {
+            QString alternativePath = QFileDialog::getSaveFileName
+            (
+                this,
+                QStringLiteral("导出 G 代码"),
+                QFileInfo(resolvedExportPath).fileName(),
+                exportFilters
+            );
+
+            if (!alternativePath.isEmpty())
+            {
+                if (QFileInfo(alternativePath).suffix().isEmpty())
+                {
+                    alternativePath.append(QStringLiteral(".nc"));
+                }
+
+                OperationReport retryResult = generator.writeProgramText
+                (
+                    alternativePath,
+                    *buildResult.value,
+                    context
+                );
+                if (retryResult.succeeded())
+                {
+                    resolvedExportPath = alternativePath;
+                }
+                writeResult = std::move(retryResult);
+            }
+        }
+    }
+
     messageCenter.publish(writeResult);
     if (!writeResult.succeeded())
     {
@@ -697,11 +770,14 @@ bool Gcode_postprocessing_system::exportGCode
         DiagnosticSeverity::Notice,
         QStringLiteral("ExportGCode"),
         QStringLiteral("Complete"),
-        QStringLiteral("G代码已导出（%1）。").arg(resolvedModeDisplayName),
+        QStringLiteral("G代码已导出（%1）。\n输出文件：%2")
+            .arg(resolvedModeDisplayName, QDir::toNativeSeparators(resolvedExportPath)),
         QString(),
         {
             { QStringLiteral("filePath"), resolvedExportPath },
-            { QStringLiteral("statusMessage"), QStringLiteral("G代码导出完成（%1）").arg(resolvedModeDisplayName) },
+            { QStringLiteral("statusMessage"),
+                QStringLiteral("G代码导出完成（%1）：%2")
+                    .arg(resolvedModeDisplayName, QDir::toNativeSeparators(resolvedExportPath)) },
             { QStringLiteral("statusDurationMs"), 5000 }
         }
     ));

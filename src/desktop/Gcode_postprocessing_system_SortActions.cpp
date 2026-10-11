@@ -3686,6 +3686,273 @@ void Gcode_postprocessing_system::handleProcessUnitReverseRequest
         announce(QStringLiteral("加工单元已整组反向，起点与方向显示已刷新。"));
 }
 
+namespace
+{
+    QString endCutSideDisplayName(cadcam::planning::EndCutSide side)
+    {
+        switch (side)
+        {
+        case cadcam::planning::EndCutSide::Left:
+            return QStringLiteral("左端面");
+        case cadcam::planning::EndCutSide::Right:
+            return QStringLiteral("右端面");
+        case cadcam::planning::EndCutSide::Section:
+        default:
+            return QStringLiteral("断面");
+        }
+    }
+
+    // 面板直接标出该端面实际生效的修正方向，便于与工艺规则核对。
+    QString endCutSideDirectionText(cadcam::planning::EndCutSide side)
+    {
+        switch (side)
+        {
+        case cadcam::planning::EndCutSide::Left:
+            return QStringLiteral("+X");
+        case cadcam::planning::EndCutSide::Right:
+            return QStringLiteral("−X");
+        case cadcam::planning::EndCutSide::Section:
+        default:
+            return QStringLiteral("不修正");
+        }
+    }
+}
+
+QString Gcode_postprocessing_system::rotaryEndCutSideSummary() const
+{
+    std::map<int, std::optional<cadcam::planning::EndCutSide>> explicitSides;
+    for (const std::unique_ptr<CadItem>& entity : m_document.m_entities)
+    {
+        if (entity == nullptr)
+        {
+            continue;
+        }
+
+        const auto state = m_processState.stateOrDefault(entity->m_entityId);
+        if (state.overrideData.boundaryRole != cadcam::planning::BoundaryRole::Break
+            || state.overrideData.boundaryPairId < 0)
+        {
+            continue;
+        }
+
+        explicitSides[state.overrideData.boundaryPairId] = state.overrideData.endCutSide;
+    }
+
+    if (explicitSides.empty())
+    {
+        return QStringLiteral("未指定加工断面");
+    }
+
+    std::map<int, cadcam::planning::EndCutSide> plannedSides;
+    std::map<int, int> unitOrderByPairId;
+    if (m_currentProcessPlan.has_value())
+    {
+        for (const cadcam::planning::EndCutSideAssignment& assignment
+            : m_currentProcessPlan->endCutSides)
+        {
+            plannedSides.emplace(assignment.boundaryPairId, assignment.side);
+        }
+
+        for (const cadcam::planning::ProcessGroup& group : m_currentProcessPlan->groups)
+        {
+            if (group.kind != cadcam::planning::ProcessGroupKind::BreakBoundary
+                || group.boundaryPairId < 0)
+            {
+                continue;
+            }
+
+            std::vector<cadcam::geometry::EntityId> groupIds = group.entityIds;
+            std::sort(groupIds.begin(), groupIds.end());
+            groupIds.erase(std::unique(groupIds.begin(), groupIds.end()), groupIds.end());
+            for (std::size_t index = 0;
+                index < m_currentProcessPlan->processUnits.size(); ++index)
+            {
+                if (m_currentProcessPlan->processUnits[index].key.memberEntityIds == groupIds)
+                {
+                    unitOrderByPairId[group.boundaryPairId] = static_cast<int>(index) + 1;
+                    break;
+                }
+            }
+        }
+    }
+
+    QStringList parts;
+    for (const auto& [pairId, explicitSide] : explicitSides)
+    {
+        const auto planned = plannedSides.find(pairId);
+        QString sideText;
+        if (explicitSide.has_value())
+        {
+            sideText = QStringLiteral("%1（%2，手动）")
+                .arg(endCutSideDisplayName(*explicitSide), endCutSideDirectionText(*explicitSide));
+        }
+        else if (planned != plannedSides.end())
+        {
+            sideText = QStringLiteral("%1（%2，自动）")
+                .arg(endCutSideDisplayName(planned->second), endCutSideDirectionText(planned->second));
+        }
+        else
+        {
+            sideText = QStringLiteral("待排序");
+        }
+
+        const auto unitOrder = unitOrderByPairId.find(pairId);
+        // 断面编号与画布断面标签一致，统一由 1 开始；加工单元编号另按当前序列位置给出。
+        parts.push_back(unitOrder != unitOrderByPairId.end()
+            ? QStringLiteral("断%1：%2，加工单元%3")
+                .arg(pairId + 1).arg(sideText).arg(unitOrder->second)
+            : QStringLiteral("断%1：%2").arg(pairId + 1).arg(sideText));
+    }
+    return parts.join(QStringLiteral("；"));
+}
+
+void Gcode_postprocessing_system::handleProcessUnitEndCutSideRequest
+    (const cadcam::planning::ProcessUnitKey& unitKey, const QPoint& globalPos)
+{
+    const auto announce = [this](const QString& message)
+    {
+        ui->openGLWidget->appendCommandMessage(message);
+        ui->openGLWidget->refreshCommandPrompt();
+        statusBar()->showMessage(message, 5000);
+    };
+    if (!m_currentProcessPlan.has_value())
+    {
+        announce(QStringLiteral("当前没有有效加工计划，请先排序。"));
+        return;
+    }
+
+    const auto unit = std::find_if
+    (
+        m_currentProcessPlan->processUnits.begin(),
+        m_currentProcessPlan->processUnits.end(),
+        [&unitKey](const cadcam::planning::ProcessUnit& candidate)
+        { return candidate.key == unitKey; }
+    );
+    if (unit == m_currentProcessPlan->processUnits.end())
+    {
+        announce(QStringLiteral("目标加工单元不属于当前计划。"));
+        return;
+    }
+
+    int pairId = -1;
+    std::vector<cadcam::geometry::EntityId> boundaryEntityIds;
+    for (const cadcam::geometry::EntityId entityId : unit->key.memberEntityIds)
+    {
+        const auto state = m_processState.stateOrDefault(entityId);
+        if (state.overrideData.boundaryRole != cadcam::planning::BoundaryRole::Break
+            || state.overrideData.boundaryPairId < 0)
+        {
+            announce(QStringLiteral("所选加工单元不是加工断面，无法设置端面语义。"));
+            return;
+        }
+        if (pairId < 0)
+        {
+            pairId = state.overrideData.boundaryPairId;
+        }
+        else if (pairId != state.overrideData.boundaryPairId)
+        {
+            announce(QStringLiteral("所选加工单元包含多个加工断面，无法设置端面语义。"));
+            return;
+        }
+        boundaryEntityIds.push_back(entityId);
+    }
+
+    if (boundaryEntityIds.empty()) return;
+
+    std::optional<cadcam::planning::EndCutSide> current;
+    for (const cadcam::geometry::EntityId entityId : boundaryEntityIds)
+    {
+        const auto state = m_processState.stateOrDefault(entityId);
+        if (state.overrideData.endCutSide.has_value())
+        {
+            current = state.overrideData.endCutSide;
+            break;
+        }
+    }
+
+    QMenu menu(this);
+    QAction* autoAction = menu.addAction(QStringLiteral("自动（按 X 方向顺序判定）"));
+    QAction* sectionAction = menu.addAction(QStringLiteral("断面（不修正）"));
+    QAction* leftAction = menu.addAction(QStringLiteral("左端面（+X 修正）"));
+    QAction* rightAction = menu.addAction(QStringLiteral("右端面（−X 修正）"));
+    for (QAction* action : { autoAction, sectionAction, leftAction, rightAction })
+    {
+        action->setCheckable(true);
+    }
+    autoAction->setChecked(!current.has_value());
+    sectionAction->setChecked(current == cadcam::planning::EndCutSide::Section);
+    leftAction->setChecked(current == cadcam::planning::EndCutSide::Left);
+    rightAction->setChecked(current == cadcam::planning::EndCutSide::Right);
+    menu.addSeparator();
+    QAction* infoAction = menu.addAction
+        (QStringLiteral("加工断面 断%1（%2 个图元）").arg(pairId + 1).arg(boundaryEntityIds.size()));
+    infoAction->setEnabled(false);
+
+    QAction* chosen = menu.exec(globalPos);
+    if (chosen == nullptr || chosen == infoAction) return;
+
+    std::optional<cadcam::planning::EndCutSide> target;
+    if (chosen == sectionAction)
+    {
+        target = cadcam::planning::EndCutSide::Section;
+    }
+    else if (chosen == leftAction)
+    {
+        target = cadcam::planning::EndCutSide::Left;
+    }
+    else if (chosen == rightAction)
+    {
+        target = cadcam::planning::EndCutSide::Right;
+    }
+
+    std::map<cadcam::geometry::EntityId, std::optional<cadcam::planning::EndCutSide>> beforeSides;
+    std::map<cadcam::geometry::EntityId, std::optional<cadcam::planning::EndCutSide>> afterSides;
+    for (const cadcam::geometry::EntityId entityId : boundaryEntityIds)
+    {
+        beforeSides[entityId] = m_processState.stateOrDefault(entityId).overrideData.endCutSide;
+        afterSides[entityId] = target;
+    }
+
+    const auto applySides = [this, announce, pairId]
+    (
+        const std::map<cadcam::geometry::EntityId,
+            std::optional<cadcam::planning::EndCutSide>>& sides,
+        bool announceResult
+    )
+    {
+        m_processState.beginBatch();
+        bool success = true;
+        for (const auto& [entityId, side] : sides)
+        {
+            success = m_processState.setEndCutSide(entityId, side) && success;
+        }
+        m_processState.endBatch();
+        if (!success)
+        {
+            announce(QStringLiteral("端面语义设置失败：请确认该加工单元仍是加工断面。"));
+            return false;
+        }
+
+        invalidateProcessOrdersAfterEndCutChange();
+        syncToolPanelState();
+        if (announceResult)
+        {
+            announce(QStringLiteral("加工断面 断%1 的端面语义已更新，请重新排序后再导出。").arg(pairId + 1));
+        }
+        return true;
+    };
+
+    const bool applied = m_editer.executeUndoableAction
+    (
+        [applySides, afterSides]() { return applySides(afterSides, true); },
+        [applySides, beforeSides]() { return applySides(beforeSides, false); }
+    );
+    if (!applied)
+    {
+        syncMachiningSettingsState();
+    }
+}
+
 void Gcode_postprocessing_system::handleProcessUnitMoveToBackRequest
 (
     const QVector<cadcam::planning::ProcessUnitKey>& selectedUnitKeys,

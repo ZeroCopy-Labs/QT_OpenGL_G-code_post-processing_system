@@ -93,6 +93,7 @@ Rotary4Axis ProcessPlan
 ## 关键业务规则
 
 - 每条路径使用计划确定的 `reverse` 和 `startParameter` 重新编译，轨迹不重新排序。
+- 加工断面的端面归属由规划阶段判定并随 `ProcessPlan` 传入。轨迹层只按计划结果过滤修正方向（左端面只补正向差值，右端面只补负向差值，普通断面不修正），不重新推算左右；计划缺少该断面的端面判定、或与用户手动端面不一致时拒绝构建并提示重新排序。
 - Break 断面和普通多图元闭环的计划片段使用与普通路径相同的生产采样策略编译完整源 `Path3D`，再按 `sourceParameterBegin`、`sourceParameterEnd` 和方向裁切。普通闭环内部入口可以来自 `Arc`/`Ellipse` 的真实几何切点，也可以来自 owner 区位可靠连续段的三维弧长中点；两者都通过真实源参数插值，不吸附到最近顶点。
 - 同一闭环起点成员可以在轨迹执行序列中出现两个互补片段。`ProcessAssignment`、`ProcessUnitKey` 和 Viewer 身份仍只保存一次稳定 `EntityId`；轨迹通过 `sourceProcessOrder` 与 `fragmentOrder` 区分源计划身份和执行位置。
 - `ProcessUnitExecutionResolver` 按展开后的片段顺序执行源空间和机床空间连续性检查。闭合组回起点和过切基于完整片段序列，不复制完整源图元。

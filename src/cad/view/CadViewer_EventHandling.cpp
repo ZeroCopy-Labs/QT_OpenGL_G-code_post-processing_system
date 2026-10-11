@@ -56,6 +56,17 @@ void CadViewer::mousePressEvent(QMouseEvent* event)
         return;
     }
 
+    if (event->button() == Qt::RightButton
+        && handleProcessUnitContextMenuPress
+            (event->pos(), event->globalPosition().toPoint()))
+    {
+        event->accept();
+        updateHoveredWorldPosition(event->pos());
+        refreshCommandPrompt();
+        update();
+        return;
+    }
+
     const bool controllerHandled = m_controller.handleMousePress(event);
 
     if (!controllerHandled && event->button() == Qt::RightButton)

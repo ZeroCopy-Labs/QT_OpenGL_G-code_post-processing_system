@@ -514,16 +514,74 @@ OperationResult<cadcam::machine::MachineTrajectory> MachineTrajectoryService::bu
                 ? QStringLiteral("true") : QStringLiteral("false")));
     if (processConfig.cutSurfacePositiveCorrection || processConfig.cutSurfaceNegativeCorrection)
     {
-        std::map<int, std::vector<std::size_t>> boundaries;
+        struct BoundaryCorrectionInput
+        {
+            int pairId = -1;
+            std::vector<std::size_t> entityIndices;
+        };
+
+        // 端面归属由规划阶段统一判定；此处只消费并校验，保证界面展示与导出不会出现不同判定。
+        std::map<int, planning::EndCutSide> resolvedSides;
+        for (const planning::EndCutSideAssignment& assignment : plan.endCutSides)
+        {
+            resolvedSides.emplace(assignment.boundaryPairId, assignment.side);
+        }
+
+        std::vector<BoundaryCorrectionInput> boundaries;
         for (std::size_t i = 0; i < input.entities.size(); ++i)
         {
             const auto state = processState.stateOrDefault(input.entities[i].entityId);
-            if (state.overrideData.boundaryRole == planning::BoundaryRole::Break)
-                boundaries[state.overrideData.boundaryPairId].push_back(i);
+            if (state.overrideData.boundaryRole != planning::BoundaryRole::Break)
+            {
+                continue;
+            }
+
+            auto boundary = std::find_if(boundaries.begin(), boundaries.end(),
+                [&state](const BoundaryCorrectionInput& candidate)
+                {
+                    return candidate.pairId == state.overrideData.boundaryPairId;
+                });
+            if (boundary == boundaries.end())
+            {
+                boundaries.push_back(BoundaryCorrectionInput
+                    { state.overrideData.boundaryPairId, {} });
+                boundary = boundaries.end() - 1;
+            }
+            boundary->entityIndices.push_back(i);
+
+            const auto resolved = resolvedSides.find(state.overrideData.boundaryPairId);
+            if (resolved == resolvedSides.end())
+            {
+                result.status = OperationStatus::InvalidInput;
+                result.addDiagnostic(serviceDiagnostic
+                (
+                    DiagnosticCode::MachineTrajectoryInputInvalid,
+                    QStringLiteral("加工断面 断%1 缺少端面判定，请重新排序后再导出。")
+                        .arg(state.overrideData.boundaryPairId + 1),
+                    taskContext.operationContext,
+                    input.entities[i].entityId
+                ));
+                return result;
+            }
+            if (state.overrideData.endCutSide.has_value()
+                && resolved->second != *state.overrideData.endCutSide)
+            {
+                result.status = OperationStatus::InvalidInput;
+                result.addDiagnostic(serviceDiagnostic
+                (
+                    DiagnosticCode::MachineTrajectoryInputInvalid,
+                    QStringLiteral("加工断面 断%1 的端面语义已被修改或与当前计划不一致，请重新排序。")
+                        .arg(state.overrideData.boundaryPairId + 1),
+                    taskContext.operationContext,
+                    input.entities[i].entityId
+                ));
+                return result;
+            }
         }
+
         for (const auto& boundary : boundaries)
         {
-            if (!tubeSection.has_value() || boundary.first < 0)
+            if (!tubeSection.has_value() || boundary.pairId < 0)
             {
                 result.status = OperationStatus::InvalidInput;
                 result.addDiagnostic(serviceDiagnostic(DiagnosticCode::MachineTrajectoryInputInvalid,
@@ -531,20 +589,27 @@ OperationResult<cadcam::machine::MachineTrajectory> MachineTrajectoryService::bu
                 return result;
             }
             std::vector<geometry::Path3D> sources;
-            for (const auto index : boundary.second) sources.push_back(input.entities[index].path);
+            for (const auto index : boundary.entityIndices) sources.push_back(input.entities[index].path);
+            const auto resolved = resolvedSides.find(boundary.pairId);
+            if (resolved == resolvedSides.end()
+                || resolved->second == planning::EndCutSide::Section)
+            {
+                continue;
+            }
             auto corrected = machining::CutSurfaceExpectation::correctPaths
                 (*tubeSection, sources, policy, processConfig.tubeWallThickness,
+                    resolved->second,
                     processConfig.cutSurfacePositiveCorrection, processConfig.cutSurfaceNegativeCorrection);
             if (!corrected.errorMessage.isEmpty())
             {
                 result.status = OperationStatus::Failed;
                 result.addDiagnostic(serviceDiagnostic(DiagnosticCode::MachineTrajectoryInvalidPath,
-                    QStringLiteral("加工断面 %1：%2").arg(boundary.first).arg(corrected.errorMessage),
-                    taskContext.operationContext, input.entities[boundary.second.front()].entityId));
+                    QStringLiteral("加工断面 断%1：%2").arg(boundary.pairId + 1).arg(corrected.errorMessage),
+                    taskContext.operationContext, input.entities[boundary.entityIndices.front()].entityId));
                 return result;
             }
-            for (std::size_t i = 0; i < boundary.second.size(); ++i)
-                input.entities[boundary.second[i]].path = std::move(corrected.paths[i]);
+            for (std::size_t i = 0; i < boundary.entityIndices.size(); ++i)
+                input.entities[boundary.entityIndices[i]].path = std::move(corrected.paths[i]);
         }
         // 修正改变切入/切出位置，原规划的空移签名不再适用。
         if (!boundaries.empty())

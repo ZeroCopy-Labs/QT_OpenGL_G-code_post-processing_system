@@ -230,6 +230,12 @@ private:
     );
     void handleProcessUnitReverseRequest
         (const cadcam::planning::ProcessUnitKey& unitKey);
+    void handleProcessUnitEndCutSideRequest
+    (
+        const cadcam::planning::ProcessUnitKey& unitKey,
+        const QPoint& globalPos
+    );
+    QString rotaryEndCutSideSummary() const;
     bool applyProcessUnitSequenceToCurrentPlan
     (
         const cadcam::planning::ProcessUnitSequence& sequence,

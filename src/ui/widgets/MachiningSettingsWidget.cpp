@@ -307,6 +307,10 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     m_endCutPreviewStatusValue->setObjectName(QStringLiteral("endCutPreviewStatus"));
     m_endCutPreviewStatusValue->setWordWrap(true);
     m_rotaryEndCutCountValue = createStatusValue(stateGroup);
+    m_endCutSideValue = createStatusValue(stateGroup);
+    m_endCutSideValue->setWordWrap(true);
+    m_endCutSideValue->setToolTip(QStringLiteral(
+        "加工断面的端面归属：自动结果按最小 X 顺序左右交替；右键画布上的断面加工单元可指定为左端面、右端面或普通断面。"));
     m_laserWallImpactVisibleCheckBox = new QCheckBox(QStringLiteral("激光内壁作用线（绿色）"), stateGroup);
     m_laserWallImpactVisibleCheckBox->setObjectName(QStringLiteral("laserWallImpactVisible"));
     m_laserWallImpactVisibleCheckBox->setChecked(true);
@@ -317,12 +321,12 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     m_expectedSurfaceVisibleCheckBox->setChecked(true);
     m_expectedSurfaceVisibleCheckBox->setToolTip(QStringLiteral(
         "与绿色作用线投影到相同内轮廓，由圆角推断的局部断面方向求 X，直角处也补入转折点；曲线边保留自身形状。边两端方向不一致时报错。两条走线还受加工标记和加工断面标记总开关控制。"));
-    m_cutSurfacePositiveCorrectionCheckBox = new QCheckBox(QStringLiteral("加工断面正向修正（+X）"), stateGroup);
+    m_cutSurfacePositiveCorrectionCheckBox = new QCheckBox(QStringLiteral("左端面修正（+X）"), stateGroup);
     m_cutSurfacePositiveCorrectionCheckBox->setObjectName(QStringLiteral("cutSurfacePositiveCorrection"));
-    m_cutSurfacePositiveCorrectionCheckBox->setToolTip(QStringLiteral("生成四轴 G 代码时，仅当期望点 X 大于内壁作用点 X，沿 +X 补足差值。默认关闭。"));
-    m_cutSurfaceNegativeCorrectionCheckBox = new QCheckBox(QStringLiteral("加工断面反向修正（−X）"), stateGroup);
+    m_cutSurfacePositiveCorrectionCheckBox->setToolTip(QStringLiteral("仅对左端面加工断面生效：期望断面内侧走线 X 大于激光内壁作用线 X 时，沿 +X 补足差值。默认关闭。"));
+    m_cutSurfaceNegativeCorrectionCheckBox = new QCheckBox(QStringLiteral("右端面修正（−X）"), stateGroup);
     m_cutSurfaceNegativeCorrectionCheckBox->setObjectName(QStringLiteral("cutSurfaceNegativeCorrection"));
-    m_cutSurfaceNegativeCorrectionCheckBox->setToolTip(QStringLiteral("生成四轴 G 代码时，仅当期望点 X 小于内壁作用点 X，沿 −X 补足差值。可与正向同时开启；显示开关不影响此工艺。"));
+    m_cutSurfaceNegativeCorrectionCheckBox->setToolTip(QStringLiteral("仅对右端面加工断面生效：期望断面内侧走线 X 小于激光内壁作用线 X 时，沿 −X 补足差值。可与左端面修正同时开启；普通“断面”不做任何修正。"));
     connect(m_cutSurfacePositiveCorrectionCheckBox, &QCheckBox::toggled, this, [this](bool checked)
     {
         if (!m_updatingUi) emit cutSurfacePositiveCorrectionChanged(checked);
@@ -340,6 +344,7 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     stateLayout->addRow(QString(), m_laserWallImpactVisibleCheckBox);
     stateLayout->addRow(QString(), m_expectedSurfaceVisibleCheckBox);
     stateLayout->addRow(QStringLiteral("加工断面："), m_rotaryEndCutCountValue);
+    stateLayout->addRow(QStringLiteral("断面端面："), m_endCutSideValue);
     statusGroupLayout->addWidget(stateGroup);
     contentLayout->addWidget(statusGroup);
     contentLayout->addStretch(1);
@@ -426,6 +431,12 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
         this, &MachiningSettingsWidget::rotaryLaserWallImpactVisibleChanged);
     connect(m_expectedSurfaceVisibleCheckBox, &QCheckBox::toggled,
         this, &MachiningSettingsWidget::rotaryExpectedSurfaceVisibleChanged);
+}
+
+void MachiningSettingsWidget::setRotaryEndCutSideSummary(const QString& summary)
+{
+    m_endCutSideValue->setText(summary.trimmed().isEmpty()
+        ? QStringLiteral("--") : summary);
 }
 
 void MachiningSettingsWidget::setRotaryEndCutPreviewStatus(const QString& status)

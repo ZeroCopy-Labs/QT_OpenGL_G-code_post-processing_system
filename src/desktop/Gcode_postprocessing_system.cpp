@@ -390,6 +390,13 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
         this,
         &Gcode_postprocessing_system::handleProcessUnitReverseRequest
     );
+    connect
+    (
+        ui->openGLWidget,
+        &CadViewer::processUnitContextMenuRequested,
+        this,
+        &Gcode_postprocessing_system::handleProcessUnitEndCutSideRequest
+    );
     connect(&m_document, &CadDocument::sceneChanged, this, updateStatusEntityType);
     connect(m_statusPaneWidget, &CadStatusPaneWidget::basePointSnapToggled, ui->openGLWidget, &CadViewer::setBasePointSnapEnabled);
     connect(m_statusPaneWidget, &CadStatusPaneWidget::controlPointSnapToggled, ui->openGLWidget, &CadViewer::setControlPointSnapEnabled);
@@ -2487,6 +2494,7 @@ void Gcode_postprocessing_system::syncMachiningSettingsState()
     }
 
     m_machiningSettingsWidget->setRotaryEndCutCount(rotaryEndCutIds.size());
+    m_machiningSettingsWidget->setRotaryEndCutSideSummary(rotaryEndCutSideSummary());
     if (measurePerformance)
     {
         m_boundaryAssignmentPerformanceReport->settingsSyncMs +=

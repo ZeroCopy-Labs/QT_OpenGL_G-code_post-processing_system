@@ -277,6 +277,7 @@ DocumentProcessPlanningAdapter::captureRotary
         entity.processEnabled = state.overrideData.processEnabled;
         entity.boundaryRole = state.overrideData.boundaryRole;
         entity.boundaryPairId = state.overrideData.boundaryPairId;
+        entity.endCutSide = state.overrideData.endCutSide;
         entity.directionPreference = rebuildSequence
             ? process::DirectionPreference::Auto : state.overrideData.direction;
         entity.startParameter = rebuildSequence

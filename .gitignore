@@ -39,3 +39,6 @@ Desktop.ini
 
 # 许可证工具本机输入：机器码 txt 由本机生成，不提交
 tools/*.txt
+
+# 本地专利资料
+/docs/patents/

@@ -2,6 +2,7 @@
 
 #include "core/machining/TubeSection.h"
 #include "core/machine/RotaryKinematics.h"
+#include "core/planning/ProcessPlan.h"
 
 namespace cadcam::machining
 {
@@ -22,6 +23,7 @@ namespace cadcam::machining
             const std::vector<geometry::Path3D>& sourcePaths,
             const machine::RotaryMachinePolicy& policy,
             double wallThickness,
+            planning::EndCutSide side,
             bool positive,
             bool negative
         );

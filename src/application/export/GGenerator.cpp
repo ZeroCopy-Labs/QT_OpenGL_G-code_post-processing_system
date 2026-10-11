@@ -350,12 +350,15 @@ OperationReport GGenerator::writeProgramText
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
     {
+        const QString nativePath = QDir::toNativeSeparators(filePath);
         report.status = OperationStatus::Failed;
         report.addDiagnostic(makeGeneratorDiagnostic
         (
             context, DiagnosticCode::FileOpenFailure, DiagnosticSeverity::Error,
             QStringLiteral("WriteProgramText"), QStringLiteral("OpenOutputFile"),
-            QStringLiteral("无法打开 G 代码输出文件。"), file.errorString(),
+            QStringLiteral("无法打开 G 代码输出文件：%1\n原因：%2\n常见原因：安全软件（如 360 文档保护）拦截未签名程序写入桌面/文档目录、文件为只读或被其他程序占用、目标目录不存在。\n可改用其他目录（例如 D 盘下的工作目录），或把本程序加入安全软件信任列表后重试。")
+                .arg(nativePath, file.errorString()),
+            file.errorString(),
             { { QStringLiteral("filePath"), filePath } }
         ));
         return report;
@@ -371,7 +374,10 @@ OperationReport GGenerator::writeProgramText
         (
             context, DiagnosticCode::FileWriteFailure, DiagnosticSeverity::Error,
             QStringLiteral("WriteProgramText"), QStringLiteral("WriteOutputFile"),
-            QStringLiteral("G 代码文件写入不完整。"),
+            QStringLiteral("G 代码文件写入不完整：%1\n已写入 %2/%3 字节，请检查磁盘空间与目标目录权限后重试。")
+                .arg(QDir::toNativeSeparators(filePath))
+                .arg(writtenLength)
+                .arg(encodedProgram.size()),
             QStringLiteral("QFile::write returned an unexpected byte count"),
             {
                 { QStringLiteral("filePath"), filePath },

@@ -33,6 +33,7 @@ public:
     void setRotaryEndCutCount(int count);
     void setRotaryTubeWallThickness(double wallThickness);
     void setCutSurfaceCorrectionOptions(bool positiveEnabled, bool negativeEnabled);
+    void setRotaryEndCutSideSummary(const QString& summary);
     void setRotaryEndCutPreviewStatus(const QString& status);
 
 signals:
@@ -80,6 +81,7 @@ private:
     QLabel* m_roundedCornerCountValue = nullptr;
     QLabel* m_centerLineValue = nullptr;
     QLabel* m_rotaryEndCutCountValue = nullptr;
+    QLabel* m_endCutSideValue = nullptr;
     QTimer* m_sectionBlinkTimer = nullptr;
     TubeSectionDiagramWidget* m_sectionDiagram = nullptr;
     bool m_sectionRecognized = false;

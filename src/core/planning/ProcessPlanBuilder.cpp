@@ -194,6 +194,7 @@ namespace cadcam::planning
                 ? ProcessGroupKind::BreakBoundary
                 : ProcessGroupKind::WasteBoundary;
             group.closed = true;
+            group.boundaryPairId = identity.pairId;
             group.entityIds = identity.entityIds;
             std::sort(group.entityIds.begin(), group.entityIds.end(), [&entities](EntityId left, EntityId right)
             {
