@@ -98,7 +98,7 @@ namespace cadcam::process
     bool DocumentProcessState::setEndCutSide
     (
         geometry::EntityId id,
-        std::optional<planning::EndCutSide> side
+        std::optional<machining::EndCutSide> side
     )
     {
         EntityProcessState state = stateOrDefault(id);

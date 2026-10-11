@@ -51,7 +51,7 @@ namespace cadcam::process
         std::optional<double> startParameter;
         planning::BoundaryRole boundaryRole = planning::BoundaryRole::None;
         int boundaryPairId = -1;
-        std::optional<planning::EndCutSide> endCutSide;
+        std::optional<machining::EndCutSide> endCutSide;
 
         bool operator==(const ProcessOverride& other) const
         {
@@ -88,7 +88,7 @@ namespace cadcam::process
         bool setEndCutSide
         (
             geometry::EntityId entityId,
-            std::optional<planning::EndCutSide> side
+            std::optional<machining::EndCutSide> side
         );
         const planning::ProcessUnitSequence& processUnitSequence() const;
         bool setProcessUnitSequence(const std::vector<planning::ProcessUnitKey>& units);

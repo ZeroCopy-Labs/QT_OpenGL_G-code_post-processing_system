@@ -14,12 +14,12 @@ namespace cadcam::machining
         const std::vector<geometry::Path3D>& sourcePaths,
         const machine::RotaryMachinePolicy& policy,
         double wallThickness,
-        planning::EndCutSide side,
+        machining::EndCutSide side,
         bool positive,
         bool negative
     )
     {
-        if (side == planning::EndCutSide::Section
+        if (side == machining::EndCutSide::Section
             || (!positive && !negative)) return { sourcePaths, {}, {} };
         auto impacts = sourcePaths;
         for (auto& path : impacts)
@@ -51,9 +51,9 @@ namespace cadcam::machining
             auto& point = expected.paths[p].vertices[i].position;
             point = sourcePaths[p].vertices[i].position;
             // 按端面过滤修正：左端面只补正向差值（向 +X），右端面只补负向差值（向 −X）；普通断面不修正。
-            const bool allowed = side == planning::EndCutSide::Left
+            const bool allowed = side == machining::EndCutSide::Left
                 ? (positive && delta > 0.0)
-                : side == planning::EndCutSide::Right
+                : side == machining::EndCutSide::Right
                     ? (negative && delta < 0.0)
                     : false;
             if (allowed) point.x += delta;

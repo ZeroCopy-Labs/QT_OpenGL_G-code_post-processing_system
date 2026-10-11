@@ -334,9 +334,9 @@ namespace
             const auto expected = machining::CutSurfaceExpectation::build(data.section, data.paths, laser);
             for (bool positive : { false, true })
             for (bool negative : { false, true })
-            for (const auto side : { planning::EndCutSide::Left,
-                                     planning::EndCutSide::Right,
-                                     planning::EndCutSide::Section })
+            for (const auto side : { machining::EndCutSide::Left,
+                                     machining::EndCutSide::Right,
+                                     machining::EndCutSide::Section })
             {
                 const auto corrected = machining::CutSurfaceExpectation::correctPaths
                     (data.section, data.paths, policy, thickness, side, positive, negative);
@@ -351,9 +351,9 @@ namespace
                     const auto& actual = corrected.paths[p].vertices[i].position;
                     const double delta = expected.paths[p].vertices[i].position.x - laser[p].vertices[i].position.x;
                     // 左端面只补正向差值（向 +X），右端面只补负向差值（向 −X），普通断面不修正。
-                    const bool enabled = side == planning::EndCutSide::Left
+                    const bool enabled = side == machining::EndCutSide::Left
                         ? (positive && delta > 0.0)
-                        : side == planning::EndCutSide::Right
+                        : side == machining::EndCutSide::Right
                             ? (negative && delta < 0.0) : false;
                     near(actual.x, source.x + (enabled ? delta : 0.0));
                     near(actual.y, source.y);
@@ -363,7 +363,7 @@ namespace
                 }
             }
             require(!machining::CutSurfaceExpectation::correctPaths
-                (data.section, data.paths, policy, 30.0, planning::EndCutSide::Right,
+                (data.section, data.paths, policy, 30.0, machining::EndCutSide::Right,
                     true, false).errorMessage.isEmpty(),
                 "invalid thickness accepted for correction");
         }
@@ -448,10 +448,10 @@ namespace
             }
             const auto assignments = planning::resolveEndCutSides(boundaries);
             require(assignments.size() == 6U, "boundary count mismatch");
-            require(sideOf(assignments, 1) == planning::EndCutSide::Left, "leftmost must be left");
-            require(sideOf(assignments, 2) == planning::EndCutSide::Right, "second must be right");
-            require(sideOf(assignments, 3) == planning::EndCutSide::Left, "third must be left");
-            require(sideOf(assignments, 6) == planning::EndCutSide::Right, "sixth must be right");
+            require(sideOf(assignments, 1) == machining::EndCutSide::Left, "leftmost must be left");
+            require(sideOf(assignments, 2) == machining::EndCutSide::Right, "second must be right");
+            require(sideOf(assignments, 3) == machining::EndCutSide::Left, "third must be left");
+            require(sideOf(assignments, 6) == machining::EndCutSide::Right, "sixth must be right");
         }
 
         // 手动指定作为新的交替基准，只影响其 +X 方向：左 右 [右] 左 右 左
@@ -462,16 +462,16 @@ namespace
                 planning::EndCutSideBoundary boundary;
                 boundary.boundaryPairId = index;
                 boundary.minimumX = static_cast<double>(index) * 10.0;
-                if (index == 3) boundary.explicitSide = planning::EndCutSide::Right;
+                if (index == 3) boundary.explicitSide = machining::EndCutSide::Right;
                 boundaries.push_back(boundary);
             }
             const auto assignments = planning::resolveEndCutSides(boundaries);
-            require(sideOf(assignments, 1) == planning::EndCutSide::Left, "left of manual changed");
-            require(sideOf(assignments, 2) == planning::EndCutSide::Right, "left of manual changed");
-            require(sideOf(assignments, 3) == planning::EndCutSide::Right, "manual side ignored");
-            require(sideOf(assignments, 4) == planning::EndCutSide::Left, "alternation not restarted");
-            require(sideOf(assignments, 5) == planning::EndCutSide::Right, "alternation broken");
-            require(sideOf(assignments, 6) == planning::EndCutSide::Left, "alternation broken");
+            require(sideOf(assignments, 1) == machining::EndCutSide::Left, "left of manual changed");
+            require(sideOf(assignments, 2) == machining::EndCutSide::Right, "left of manual changed");
+            require(sideOf(assignments, 3) == machining::EndCutSide::Right, "manual side ignored");
+            require(sideOf(assignments, 4) == machining::EndCutSide::Left, "alternation not restarted");
+            require(sideOf(assignments, 5) == machining::EndCutSide::Right, "alternation broken");
+            require(sideOf(assignments, 6) == machining::EndCutSide::Left, "alternation broken");
         }
 
         // 手动“断面”不参与交替，也不改变交替基准。
@@ -482,13 +482,13 @@ namespace
                 planning::EndCutSideBoundary boundary;
                 boundary.boundaryPairId = index;
                 boundary.minimumX = static_cast<double>(index);
-                if (index == 1) boundary.explicitSide = planning::EndCutSide::Section;
+                if (index == 1) boundary.explicitSide = machining::EndCutSide::Section;
                 boundaries.push_back(boundary);
             }
             const auto assignments = planning::resolveEndCutSides(boundaries);
-            require(sideOf(assignments, 1) == planning::EndCutSide::Section, "manual section lost");
-            require(sideOf(assignments, 2) == planning::EndCutSide::Left, "section consumed a side slot");
-            require(sideOf(assignments, 3) == planning::EndCutSide::Right, "alternation affected");
+            require(sideOf(assignments, 1) == machining::EndCutSide::Section, "manual section lost");
+            require(sideOf(assignments, 2) == machining::EndCutSide::Left, "section consumed a side slot");
+            require(sideOf(assignments, 3) == machining::EndCutSide::Right, "alternation affected");
         }
 
         // 最小 X 相同时按断面编号稳定消歧。
@@ -498,7 +498,7 @@ namespace
             boundaries.push_back({ 2, 5.0, std::nullopt });
             const auto assignments = planning::resolveEndCutSides(boundaries);
             require(assignments.front().boundaryPairId == 2, "pairId tie-break failed");
-            require(assignments.front().side == planning::EndCutSide::Left, "tie-break order wrong");
+            require(assignments.front().side == machining::EndCutSide::Left, "tie-break order wrong");
         }
     }
 }

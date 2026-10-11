@@ -42,3 +42,7 @@ tools/*.txt
 
 # 本地专利资料
 /docs/patents/
+
+# 导出的 G 代码与测试临时目录（生成物）
+*.nc
+x64/test-temp/

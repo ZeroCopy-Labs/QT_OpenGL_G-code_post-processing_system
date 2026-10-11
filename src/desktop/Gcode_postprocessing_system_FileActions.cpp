@@ -1,4 +1,5 @@
 #include "platform/pch.h"
+#include "infrastructure/config/AppSettings.h"
 
 #include "desktop/Gcode_postprocessing_system.h"
 
@@ -413,7 +414,7 @@ QString Gcode_postprocessing_system::defaultDxfPathForCurrentDocument() const
 
 QString Gcode_postprocessing_system::loadLastImportDirectory() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     return settings.value(QStringLiteral("ui/lastImportDirectory"), QString()).toString().trimmed();
 }
 
@@ -427,6 +428,6 @@ void Gcode_postprocessing_system::saveLastImportDirectory(const QString& filePat
         return;
     }
 
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("ui/lastImportDirectory"), directoryPath);
 }

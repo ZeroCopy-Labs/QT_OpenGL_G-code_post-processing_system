@@ -1,4 +1,5 @@
 #include "platform/pch.h"
+#include "infrastructure/config/AppSettings.h"
 
 #include "application/export/GGenerator.h"
 #include "application/nc/NcProgramService.h"
@@ -25,15 +26,13 @@ namespace
 
     QString loadLastExportPath()
     {
-        QSettings settings(QStringLiteral("GCodePostProcessingSystem"),
-            QStringLiteral("GCodePostProcessingSystem"));
+        QSettings settings = makeAppSettings();
         return settings.value(QStringLiteral("gcode/lastExportPath"), QString()).toString().trimmed();
     }
 
     void saveLastExportPath(const QString& filePath)
     {
-        QSettings settings(QStringLiteral("GCodePostProcessingSystem"),
-            QStringLiteral("GCodePostProcessingSystem"));
+        QSettings settings = makeAppSettings();
         settings.setValue(QStringLiteral("gcode/lastExportPath"), filePath.trimmed());
     }
 

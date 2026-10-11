@@ -521,7 +521,7 @@ OperationResult<cadcam::machine::MachineTrajectory> MachineTrajectoryService::bu
         };
 
         // 端面归属由规划阶段统一判定；此处只消费并校验，保证界面展示与导出不会出现不同判定。
-        std::map<int, planning::EndCutSide> resolvedSides;
+        std::map<int, machining::EndCutSide> resolvedSides;
         for (const planning::EndCutSideAssignment& assignment : plan.endCutSides)
         {
             resolvedSides.emplace(assignment.boundaryPairId, assignment.side);
@@ -592,7 +592,7 @@ OperationResult<cadcam::machine::MachineTrajectory> MachineTrajectoryService::bu
             for (const auto index : boundary.entityIndices) sources.push_back(input.entities[index].path);
             const auto resolved = resolvedSides.find(boundary.pairId);
             if (resolved == resolvedSides.end()
-                || resolved->second == planning::EndCutSide::Section)
+                || resolved->second == machining::EndCutSide::Section)
             {
                 continue;
             }

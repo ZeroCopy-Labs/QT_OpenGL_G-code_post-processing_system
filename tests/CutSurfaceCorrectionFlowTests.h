@@ -95,8 +95,8 @@ inline void boundaryMinimumXOrderTests()
                 if (assignment.boundaryPairId == pairId) return assignment.side;
             throw std::runtime_error("end-cut side assignment missing for boundary");
         };
-        if (sideOf(first) != planning::EndCutSide::Left
-            || sideOf(1 - first) != planning::EndCutSide::Right)
+        if (sideOf(first) != machining::EndCutSide::Left
+            || sideOf(1 - first) != machining::EndCutSide::Right)
             throw std::runtime_error("end-cut side alternation wrong for minimum-X order");
 
         // 两个端面修正开关同时开启时仍应导出成功：左端面只补正向差值（+X）、右端面只补负向差值（−X）。
@@ -169,7 +169,7 @@ inline void cutSurfaceCorrectionFlowTests()
     plan.processStateRevision = state.revision();
     planning::EndCutSideAssignment endCutSide;
     endCutSide.boundaryPairId = 0;
-    endCutSide.side = planning::EndCutSide::Left;
+    endCutSide.side = machining::EndCutSide::Left;
     endCutSide.userSpecified = true;
     plan.endCutSides.push_back(endCutSide);
     GProfile profile;
@@ -234,10 +234,10 @@ inline void cutSurfaceCorrectionFlowTests()
     generator.setCutSurfaceCorrection(6.0, false, false);
     check(generator.buildProgramText({}).value == std::optional<QString>(programs[0]));
     // 手动“断面”不做任何修正：两个开关同时开启也与全关一致。
-    plan.endCutSides[0].side = planning::EndCutSide::Section;
+    plan.endCutSides[0].side = machining::EndCutSide::Section;
     generator.setCutSurfaceCorrection(6.0, true, true);
     check(generator.buildProgramText({}).value == std::optional<QString>(programs[0]));
-    plan.endCutSides[0].side = planning::EndCutSide::Left;
+    plan.endCutSides[0].side = machining::EndCutSide::Left;
     generator.setCutSurfaceCorrection(30.0, true, true);
     check(!generator.buildProgramText({}).succeeded());
     // 取消断面标记：普通加工单元不受修正影响，即使壁厚无效也不使用该工艺。

@@ -529,6 +529,19 @@ if exist "$(VCRuntimeRedistDir)\*.dll" copy /Y "$(VCRuntimeRedistDir)\*.dll" "$(
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>platform/pch.h</PrecompiledHeaderFile>
     </ClCompile>
+    <ClCompile Include="src\desktop\Gcode_postprocessing_system_BoundaryActions.cpp">
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>platform/pch.h</PrecompiledHeaderFile>
+    </ClCompile>
+    <ClCompile Include="src\desktop\Gcode_postprocessing_system_ProcessUnitActions.cpp">
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>platform/pch.h</PrecompiledHeaderFile>
+    </ClCompile>
+    <ClCompile Include="src\desktop\Gcode_postprocessing_system_WasteActions.cpp">
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>platform/pch.h</PrecompiledHeaderFile>
+    </ClCompile>
+    <ClInclude Include="include\desktop\internal\ProcessActionSupport.h" />
     <ClCompile Include="src\desktop\Gcode_postprocessing_system_GCodeActions.cpp">
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>platform/pch.h</PrecompiledHeaderFile>
@@ -591,6 +604,7 @@ if exist "$(VCRuntimeRedistDir)\*.dll" copy /Y "$(VCRuntimeRedistDir)\*.dll" "$(
     <ClInclude Include="include\ui\dialogs\GProfileManagerDialog.h" />
     <ClInclude Include="include\infrastructure\config\GProfilePathStore.h" />
     <ClInclude Include="include\infrastructure\config\RecentDocumentStore.h" />
+    <ClInclude Include="include\infrastructure\config\AppSettings.h" />
     <ClInclude Include="include\infrastructure\config\MachiningParameterStore.h" />
     <ClInclude Include="include\infrastructure\config\MachiningProcessConfig.h" />
     <ClInclude Include="include\infrastructure\image\CadBitmapVectorizer.h" />
@@ -649,6 +663,7 @@ if exist "$(VCRuntimeRedistDir)\*.dll" copy /Y "$(VCRuntimeRedistDir)\*.dll" "$(
     <ClInclude Include="include\core\machining\TubeSection.h" />
     <ClInclude Include="include\core\machining\TubeSectionProjector.h" />
     <ClInclude Include="include\core\machining\CutSurfaceExpectation.h" />
+    <ClInclude Include="include\core\machining\EndCutSide.h" />
     <ClInclude Include="include\core\machine\MachineTrajectory.h" />
     <ClInclude Include="include\core\machine\PlanarTrajectoryBuilder.h" />
     <ClInclude Include="include\core\machine\ProcessUnitExecutionResolver.h" />

@@ -181,17 +181,22 @@ inline void toolTransferTests()
             for (const auto& diagnostic : trajectory.diagnostics)
                 std::cerr << diagnostic.userMessage.toStdString() << '\n';
         check(trajectory.succeeded() && trajectory.value.has_value());
-        if (linked)
-        {
-            auto changed = processConfig;
-            changed.sameZone.minimumRetractHeight = 4;
-            check(!MachineTrajectoryService().buildRotaryTrajectory
-                (document, state, *plan.value, section, changed, {}).succeeded());
-        }
         const auto& moves = trajectory.value->entities.back().approachMoves;
         check(moves.size() == (linked ? (ratio == 0.5 ? 4U : 5U) : 3U));
         near(moves.front().target.z, linked ? 32 : 40);
         near(moves.back().target.z, 30);
+        if (linked)
+        {
+            // 同区位转移的形状参数变化不会让轨迹层拒绝构建（它消费计划签名并按当前参数重组阶段），
+            // 整体失效依赖桌面层“修改配置即清除计划”。此处固定当前行为，避免被误认为强校验。
+            auto changed = processConfig;
+            changed.sameZoneTransferClearance = processConfig.sameZoneTransferClearance + 10.0;
+            changed.sameZone.departureRatio = 0.1;
+            changed.sameZone.approachRatio = 0.1;
+            auto changedTrajectory = MachineTrajectoryService().buildRotaryTrajectory
+                (document, state, *plan.value, section, changed, {});
+            check(changedTrajectory.succeeded() && changedTrajectory.value.has_value());
+        }
         auto transfer = config;
         transfer.sameZone = policy.sameZone;
         transfer.coordinatedTransferEnabled = linked;

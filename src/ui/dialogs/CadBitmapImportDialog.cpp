@@ -1,6 +1,7 @@
 // 实现 CadBitmapImportDialog 模块，对应头文件中声明的主要行为和协作流程。
 // 位图导入对话框模块，负责导入参数配置、预处理预览和导入方式选择。
 #include "platform/pch.h"
+#include "infrastructure/config/AppSettings.h"
 
 #include "ui/dialogs/CadBitmapImportDialog.h"
 
@@ -507,7 +508,7 @@ void CadBitmapImportDialog::connectSignals()
 
 void CadBitmapImportDialog::loadSettings()
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.beginGroup(QStringLiteral("bitmapImport"));
 
     setComboCurrentData(m_importModeCombo, settings.value(QStringLiteral("importMode"), static_cast<int>(CadBitmapImportMode::ReplaceDocument)).toInt());
@@ -545,7 +546,7 @@ void CadBitmapImportDialog::loadSettings()
 
 void CadBitmapImportDialog::saveSettings() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     const CadBitmapImportOptions importOptions = collectOptions();
 
     settings.beginGroup(QStringLiteral("bitmapImport"));

@@ -75,7 +75,17 @@ G-code Post-processing System 是运行于 Windows 的桌面 CAD/CAM 软件，�
 x64/Release/
 ```
 
-## 4. 文档导航
+## 4. 测试
+
+在 x64 Visual Studio Developer PowerShell 中，用统一入口构建并运行两个测试套件：
+
+```powershell
+.\tests\run-all.ps1 -QtRoot "D:\Qt\6.9.3\msvc2022_64" -OpenCVRoot "D:\develop\opencv"
+```
+
+`-SkipBuild` 可跳过构建直接运行。套件为 `CutSurfacePreviewTests` 与 `TubeWallThicknessFlowTests`；测试会把应用设置隔离到 `x64/test-temp/` 下的临时目录，不会读写用户真实设置（隔离失效会直接报错）。
+
+## 5. 文档导航
 
 - [文档入口](./docs/index.md)
 - [用户指南](./docs/user-guide/index.md)
@@ -91,7 +101,7 @@ x64/Release/
 - [加工工艺](./docs/requirements/machining-process.md)
 - [G-code 与导出](./docs/requirements/gcode-and-export.md)
 
-## 5. 加工安全
+## 6. 加工安全
 
 生成的 G-code 在实际加工前必须完成：
 

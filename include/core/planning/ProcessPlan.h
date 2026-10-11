@@ -2,6 +2,7 @@
 #include "core/machine/SameZoneTransferParameters.h"
 
 #include "core/geometry/Path3D.h"
+#include "core/machining/EndCutSide.h"
 #include "core/machining/TubeSection.h"
 #include "core/machining/TubeSectionProjector.h"
 #include "core/topology/PathTopology.h"
@@ -27,8 +28,6 @@ namespace cadcam::planning
     enum class PerimeterSweepDirection { Clockwise, CounterClockwise };
     enum class LongitudinalSweepDirection { PositiveX, NegativeX };
     enum class BoundaryRole { None, Break, Waste };
-    // 加工断面的端面语义。未设置时由 X 方向的断面顺序自动判定。
-    enum class EndCutSide { Section, Left, Right };
     enum class ProcessGroupKind { SingleEntity, ConnectedChain, ClosedLoop, BreakBoundary, WasteBoundary };
     enum class ProcessExclusionReason { Hidden, UserDisabled, WasteRegion, UnsupportedGeometry, InvalidPath };
     enum class BoundarySide { Left, OnBoundary, Right, Mixed, Indeterminate };
@@ -114,7 +113,7 @@ namespace cadcam::planning
         bool processEnabled = true;
         BoundaryRole boundaryRole = BoundaryRole::None;
         int boundaryPairId = -1;
-        std::optional<EndCutSide> endCutSide;
+        std::optional<machining::EndCutSide> endCutSide;
         process::DirectionPreference directionPreference = process::DirectionPreference::Auto;
         std::optional<double> startParameter;
         process::DirectionPreference manualDirectionPreference =
@@ -193,13 +192,13 @@ namespace cadcam::planning
     {
         int boundaryPairId = -1;
         double minimumX = 0.0;
-        std::optional<EndCutSide> explicitSide;
+        std::optional<machining::EndCutSide> explicitSide;
     };
 
     struct EndCutSideAssignment
     {
         int boundaryPairId = -1;
-        EndCutSide side = EndCutSide::Section;
+        machining::EndCutSide side = machining::EndCutSide::Section;
         bool userSpecified = false;
     };
 
@@ -220,7 +219,7 @@ namespace cadcam::planning
 
         std::vector<EndCutSideAssignment> assignments;
         assignments.reserve(boundaries.size());
-        EndCutSide nextAutomaticSide = EndCutSide::Left;
+        machining::EndCutSide nextAutomaticSide = machining::EndCutSide::Left;
         for (const EndCutSideBoundary& boundary : boundaries)
         {
             EndCutSideAssignment assignment;
@@ -229,20 +228,20 @@ namespace cadcam::planning
             {
                 assignment.side = *boundary.explicitSide;
                 assignment.userSpecified = true;
-                if (assignment.side == EndCutSide::Left)
+                if (assignment.side == machining::EndCutSide::Left)
                 {
-                    nextAutomaticSide = EndCutSide::Right;
+                    nextAutomaticSide = machining::EndCutSide::Right;
                 }
-                else if (assignment.side == EndCutSide::Right)
+                else if (assignment.side == machining::EndCutSide::Right)
                 {
-                    nextAutomaticSide = EndCutSide::Left;
+                    nextAutomaticSide = machining::EndCutSide::Left;
                 }
             }
             else
             {
                 assignment.side = nextAutomaticSide;
-                nextAutomaticSide = nextAutomaticSide == EndCutSide::Left
-                    ? EndCutSide::Right : EndCutSide::Left;
+                nextAutomaticSide = nextAutomaticSide == machining::EndCutSide::Left
+                    ? machining::EndCutSide::Right : machining::EndCutSide::Left;
             }
             assignments.push_back(assignment);
         }

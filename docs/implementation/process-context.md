@@ -122,7 +122,8 @@ ProcessPlan 中的加工单元顺序
 - `src/application/process/DocumentProcessState.cpp`：实现状态去默认值、批处理和 revision 推进。
 - `include/desktop/Gcode_postprocessing_system.h`：拥有当前文档、截面、加工状态、计划和展示快照。
 - `src/desktop/Gcode_postprocessing_system_FileActions.cpp`：处理导入时的状态清理和自动后处理。
-- `src/desktop/Gcode_postprocessing_system_SortActions.cpp`：写入加工状态并使派生计划失效。
+- `src/desktop/Gcode_postprocessing_system_BoundaryActions.cpp`：写入断面与端面相关的加工状态。
+- `src/desktop/Gcode_postprocessing_system_ProcessUnitActions.cpp`：写入加工单元序列与遍历覆盖，并使派生计划失效。
 - `src/cad/editing/CadEditer_CommandActions.cpp`：块内移尾和整组反向时保存操作前后状态，并通过 Undo/Redo 恢复。
 - `src/application/planning/DocumentProcessPlanningAdapter.cpp`：将文档与加工状态捕获为核心规划输入。
 

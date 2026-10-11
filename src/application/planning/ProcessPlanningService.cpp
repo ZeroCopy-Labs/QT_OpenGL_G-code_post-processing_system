@@ -46,7 +46,7 @@ namespace
         struct BoundaryAccumulator
         {
             double minimumX = std::numeric_limits<double>::max();
-            std::optional<cadcam::planning::EndCutSide> explicitSide;
+            std::optional<cadcam::machining::EndCutSide> explicitSide;
         };
 
         std::map<int, BoundaryAccumulator> byPairId;

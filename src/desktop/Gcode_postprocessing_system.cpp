@@ -1,4 +1,5 @@
 #include "platform/pch.h"
+#include "infrastructure/config/AppSettings.h"
 
 #include "desktop/Gcode_postprocessing_system.h"
 #include "ui/dialogs/CadAppearanceSettingsDialog.h"
@@ -657,7 +658,7 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
     initializeMachiningSettingsDock();
     initializeToolPanel();
 
-    QSettings windowSettings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings windowSettings = makeAppSettings();
     restoreGeometry(windowSettings.value(QStringLiteral("ui/mainWindowGeometry")).toByteArray());
     const QByteArray savedWindowState = windowSettings.value(QStringLiteral("ui/mainWindowState")).toByteArray();
 
@@ -674,7 +675,7 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
 
 Gcode_postprocessing_system::~Gcode_postprocessing_system()
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("ui/mainWindowGeometry"), saveGeometry());
     settings.setValue(QStringLiteral("ui/mainWindowState"), saveState());
     delete ui;
@@ -1384,13 +1385,13 @@ bool Gcode_postprocessing_system::applyLoadedProfileById(const QString& profileI
 
 QString Gcode_postprocessing_system::loadSelectedProfileId() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     return settings.value(QStringLiteral("gcode/selectedProfileId"), QString::fromLatin1(kBuiltinThreeAxisProfileId)).toString().trimmed();
 }
 
 void Gcode_postprocessing_system::saveSelectedProfileId(const QString& profileId) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("gcode/selectedProfileId"), profileId.trimmed());
 }
 
@@ -1516,20 +1517,20 @@ void Gcode_postprocessing_system::applyThemeColors(const AppThemeColors& theme, 
 
 AppThemeMode Gcode_postprocessing_system::loadThemeMode() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     const QString themeValue = settings.value(QStringLiteral("ui/themeMode"), QStringLiteral("light")).toString().trimmed().toLower();
     return settingValueToThemeMode(themeValue);
 }
 
 void Gcode_postprocessing_system::saveThemeMode(AppThemeMode mode) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("ui/themeMode"), themeModeToSettingValue(mode));
 }
 
 AppThemeColors Gcode_postprocessing_system::loadCustomThemeColors(AppThemeMode* baseMode) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     const AppThemeMode storedBaseMode = settingValueToThemeMode
     (
         settings.value(QStringLiteral("ui/customThemeBaseMode"), QStringLiteral("light")).toString()
@@ -1567,7 +1568,7 @@ AppThemeColors Gcode_postprocessing_system::loadCustomThemeColors(AppThemeMode* 
 
 void Gcode_postprocessing_system::saveCustomThemeColors(AppThemeMode baseMode, const AppThemeColors& theme) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     const AppThemeMode storedBaseMode = baseMode == AppThemeMode::Dark ? AppThemeMode::Dark : AppThemeMode::Light;
     settings.setValue(QStringLiteral("ui/customThemeBaseMode"), themeModeToSettingValue(storedBaseMode));
 
@@ -1583,7 +1584,7 @@ void Gcode_postprocessing_system::saveCustomThemeColors(AppThemeMode baseMode, c
 
 quint32 Gcode_postprocessing_system::loadSnapOptionMask() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     const quint32 defaultMask = CadStatusPaneWidget::defaultSnapOptionMask();
     bool converted = false;
     const quint32 storedMask = settings.value(QStringLiteral("ui/snapModeMask"), defaultMask).toUInt(&converted);
@@ -1598,7 +1599,7 @@ quint32 Gcode_postprocessing_system::loadSnapOptionMask() const
 
 void Gcode_postprocessing_system::saveSnapOptionMask(quint32 mask) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue
     (
         QStringLiteral("ui/snapModeMask"),
@@ -1608,31 +1609,31 @@ void Gcode_postprocessing_system::saveSnapOptionMask(quint32 mask) const
 
 bool Gcode_postprocessing_system::loadProcessVisualsVisible() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     return settings.value(QStringLiteral("ui/processVisualsVisible"), true).toBool();
 }
 
 void Gcode_postprocessing_system::saveProcessVisualsVisible(bool enabled) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("ui/processVisualsVisible"), enabled);
 }
 
 bool Gcode_postprocessing_system::loadDisplayOption(const QString& key, bool defaultValue) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     return settings.value(QStringLiteral("ui/display/") + key, defaultValue).toBool();
 }
 
 void Gcode_postprocessing_system::saveDisplayOption(const QString& key, bool enabled) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("ui/display/") + key, enabled);
 }
 
 Gcode_postprocessing_system::GCodeGenerationPreference Gcode_postprocessing_system::loadGenerationPreference() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     const QString modeValue = settings.value(QStringLiteral("gcode/outputMode"), QStringLiteral("auto")).toString().trimmed().toLower();
 
     if (modeValue == QStringLiteral("2d"))
@@ -1650,7 +1651,7 @@ Gcode_postprocessing_system::GCodeGenerationPreference Gcode_postprocessing_syst
 
 bool Gcode_postprocessing_system::loadAutoDeduplicateOnImport() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     const QString newKey = QStringLiteral("dxf/autoDeduplicateOnImport");
 
     if (settings.contains(newKey))
@@ -1665,109 +1666,109 @@ bool Gcode_postprocessing_system::loadAutoDeduplicateOnImport() const
 
 void Gcode_postprocessing_system::saveAutoDeduplicateOnImport(bool enabled) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("dxf/autoDeduplicateOnImport"), enabled);
 }
 
 bool Gcode_postprocessing_system::loadCutSurfacePositiveCorrection() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     return settings.value(QStringLiteral("gcode/cutSurfacePositiveCorrection"), false).toBool();
 }
 
 void Gcode_postprocessing_system::saveCutSurfacePositiveCorrection(bool enabled) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("gcode/cutSurfacePositiveCorrection"), enabled);
 }
 
 bool Gcode_postprocessing_system::loadCutSurfaceNegativeCorrection() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     return settings.value(QStringLiteral("gcode/cutSurfaceNegativeCorrection"), false).toBool();
 }
 
 void Gcode_postprocessing_system::saveCutSurfaceNegativeCorrection(bool enabled) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("gcode/cutSurfaceNegativeCorrection"), enabled);
 }
 
 bool Gcode_postprocessing_system::loadAutoRecognizeRotaryTubeSectionOnImport() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     return settings.value(QStringLiteral("dxf/autoRecognizeRotaryTubeSectionOnImport"), false).toBool();
 }
 
 void Gcode_postprocessing_system::saveAutoRecognizeRotaryTubeSectionOnImport(bool enabled) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("dxf/autoRecognizeRotaryTubeSectionOnImport"), enabled);
 }
 
 bool Gcode_postprocessing_system::loadAutoRecognizeRotaryEndCutsOnImport() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     return settings.value(QStringLiteral("dxf/autoRecognizeRotaryEndCutsOnImport"), false).toBool();
 }
 
 void Gcode_postprocessing_system::saveAutoRecognizeRotaryEndCutsOnImport(bool enabled) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("dxf/autoRecognizeRotaryEndCutsOnImport"), enabled);
 }
 
 bool Gcode_postprocessing_system::loadAutoRemoveInternalPathsOnImport() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     return settings.value(QStringLiteral("dxf/autoRemoveInternalPathsOnImport"), false).toBool();
 }
 
 void Gcode_postprocessing_system::saveAutoRemoveInternalPathsOnImport(bool enabled) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("dxf/autoRemoveInternalPathsOnImport"), enabled);
 }
 
 bool Gcode_postprocessing_system::loadUseDxfFileNameOnExport() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     return settings.value(QStringLiteral("gcode/useDxfFileNameOnExport"), false).toBool();
 }
 
 void Gcode_postprocessing_system::saveUseDxfFileNameOnExport(bool enabled) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("gcode/useDxfFileNameOnExport"), enabled);
 }
 
 bool Gcode_postprocessing_system::loadUseDefaultImportPath() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     return settings.value(QStringLiteral("ui/useDefaultImportPath"), true).toBool();
 }
 
 void Gcode_postprocessing_system::saveUseDefaultImportPath(bool enabled) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("ui/useDefaultImportPath"), enabled);
 }
 
 bool Gcode_postprocessing_system::loadUseDefaultExportPath() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     return settings.value(QStringLiteral("gcode/useDefaultExportPath"), true).toBool();
 }
 
 void Gcode_postprocessing_system::saveUseDefaultExportPath(bool enabled) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("gcode/useDefaultExportPath"), enabled);
 }
 
 void Gcode_postprocessing_system::saveGenerationPreference(GCodeGenerationPreference preference) const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     QString modeValue = QStringLiteral("auto");
 
     if (preference == GCodeGenerationPreference::Force2D)

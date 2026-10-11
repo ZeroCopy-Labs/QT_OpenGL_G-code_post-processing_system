@@ -1,4 +1,5 @@
 #include "desktop/Gcode_postprocessing_system.h"
+#include "infrastructure/config/AppSettings.h"
 #include "ui/widgets/MachiningSettingsWidget.h"
 
 #include <QApplication>
@@ -17,10 +18,22 @@ int main(int argc, char** argv)
     QApplication application(argc, argv);
     // 测试真实主窗口的信号连接，同时隔离用户配置。
     QTemporaryDir settingsDirectory;
-    if (!settingsDirectory.isValid()) return 1;
+    if (!settingsDirectory.isValid())
+    {
+        // 静默返回 1 会让失败难以定位：明确说明原因（通常是系统临时目录不可用）。
+        std::cerr << "FAIL: 无法创建临时目录用于隔离用户设置；请检查系统 TEMP/TMP 是否可用。\n";
+        return 1;
+    }
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory.path());
     QSettings::setPath(QSettings::IniFormat, QSettings::SystemScope, settingsDirectory.path());
+    // 防呆：应用设置必须落在临时目录内，否则测试会读写用户真实设置。
+    const QString isolatedSettingsFile = makeAppSettings().fileName();
+    if (!isolatedSettingsFile.startsWith(settingsDirectory.path()))
+    {
+        std::cerr << "FAIL: 应用设置未隔离到临时目录：" << isolatedSettingsFile.toStdString() << '\n';
+        return 1;
+    }
     try
     {
         cutSurfaceCorrectionFlowTests();

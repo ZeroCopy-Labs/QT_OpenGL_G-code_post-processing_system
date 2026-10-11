@@ -260,6 +260,10 @@ Application 的 `DocumentProcessState` 持有当前 `ProcessUnitSequence`。Core
 ## 相关源码
 
 - `src/desktop/Gcode_postprocessing_system_SortActions.cpp`：提供排序 UI 入口、策略选择和计划保存。
+- `src/desktop/Gcode_postprocessing_system_BoundaryActions.cpp`：加工断面的指定、识别、清除和断面性能测量入口。
+- `src/desktop/Gcode_postprocessing_system_ProcessUnitActions.cpp`：加工单元编排（块内移尾、整组反向、端面语义）与派生结果失效。
+- `src/desktop/Gcode_postprocessing_system_WasteActions.cpp`：废面刷新与区间排除计算。
+- `include/desktop/internal/ProcessActionSupport.h`：上述四类操作共用的排序、几何与断面解析辅助实现细节。
 - `src/application/planning/ProcessPlanningService.cpp`：组织文档捕获、核心规划和 revision 复核。
 - `include/infrastructure/config/GProfile.h`：保存周向、轴向扫描方向及默认值。
 - `src/ui/dialogs/GProfileDialog.cpp`：提供周向和轴向扫描方向配置入口。

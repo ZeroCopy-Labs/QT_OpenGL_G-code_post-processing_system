@@ -99,7 +99,7 @@ Ctrl 单击时，Viewer 将当前选中图元的稳定 `EntityId` 映射到展�
 - `src/application/process/ProcessPresentationSnapshot.cpp`：校验计划并生成单元级和逐图元展示数据。
 - `include/application/process/ProcessPresentationSnapshot.h`：定义单元级与逐图元展示快照。
 - `include/core/planning/ProcessPlan.h`：定义加工单元、单元序列和逐图元 assignment。
-- `src/desktop/Gcode_postprocessing_system_SortActions.cpp`：校验连续选中范围，按值保存加工状态前后快照，并构造原子更新回调。
+- `src/desktop/Gcode_postprocessing_system_ProcessUnitActions.cpp`：校验连续选中范围，按值保存加工状态前后快照，并构造原子更新回调。
 - `src/cad/editing/CadEditer_CommandActions.cpp`：通过通用回调命令把加工交互接入 CAD 共用的 Undo/Redo 栈，不解释加工单元类型。
 
 ## 当前实现差异

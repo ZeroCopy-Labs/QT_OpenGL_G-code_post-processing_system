@@ -1,4 +1,5 @@
 #include "platform/pch.h"
+#include "infrastructure/config/AppSettings.h"
 
 #include "infrastructure/config/MachiningParameterStore.h"
 
@@ -10,8 +11,6 @@
 
 namespace
 {
-    constexpr const char* kSettingsOrganization = "GCodePostProcessingSystem";
-    constexpr const char* kSettingsApplication = "GCodePostProcessingSystem";
     constexpr const char* kRootGroup = "MachiningParameters";
     constexpr const char* kToolTransferGroup = "ToolTransfer";
     constexpr const char* kRotaryAxisGroup = "RotaryAxis";
@@ -97,11 +96,7 @@ namespace
 
 void MachiningParameterStore::applyTo(GProfile& profile)
 {
-    QSettings settings
-    (
-        QString::fromLatin1(kSettingsOrganization),
-        QString::fromLatin1(kSettingsApplication)
-    );
+    QSettings settings = makeAppSettings();
     settings.beginGroup(QString::fromLatin1(kRootGroup));
 
     GProfileToolTransferConfig transfer = profile.toolTransferConfig();
@@ -222,11 +217,7 @@ void MachiningParameterStore::save
     const GProfileRotaryAxisConfig& rotary
 )
 {
-    QSettings settings
-    (
-        QString::fromLatin1(kSettingsOrganization),
-        QString::fromLatin1(kSettingsApplication)
-    );
+    QSettings settings = makeAppSettings();
     settings.beginGroup(QString::fromLatin1(kRootGroup));
 
     settings.beginGroup(QString::fromLatin1(kToolTransferGroup));

@@ -1,4 +1,5 @@
 #include "platform/pch.h"
+#include "infrastructure/config/AppSettings.h"
 
 #include "desktop/Gcode_postprocessing_system.h"
 
@@ -863,7 +864,7 @@ QString Gcode_postprocessing_system::generationModeDisplayName(GGenerator::Gener
 
 QString Gcode_postprocessing_system::loadLastGCodeExportPath() const
 {
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     return settings.value(QStringLiteral("gcode/lastExportPath"), QString()).toString().trimmed();
 }
 
@@ -874,6 +875,6 @@ void Gcode_postprocessing_system::saveLastGCodeExportPath(const QString& filePat
         return;
     }
 
-    QSettings settings(QStringLiteral("GCodePostProcessingSystem"), QStringLiteral("GCodePostProcessingSystem"));
+    QSettings settings = makeAppSettings();
     settings.setValue(QStringLiteral("gcode/lastExportPath"), filePath.trimmed());
 }

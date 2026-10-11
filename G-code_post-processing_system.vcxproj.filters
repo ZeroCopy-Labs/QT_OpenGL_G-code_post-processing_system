@@ -367,6 +367,18 @@
     <ClCompile Include="src\desktop\Gcode_postprocessing_system_SortActions.cpp">
       <Filter>Source Files\desktop</Filter>
     </ClCompile>
+    <ClCompile Include="src\desktop\Gcode_postprocessing_system_BoundaryActions.cpp">
+      <Filter>Source Files\desktop</Filter>
+    </ClCompile>
+    <ClCompile Include="src\desktop\Gcode_postprocessing_system_ProcessUnitActions.cpp">
+      <Filter>Source Files\desktop</Filter>
+    </ClCompile>
+    <ClCompile Include="src\desktop\Gcode_postprocessing_system_WasteActions.cpp">
+      <Filter>Source Files\desktop</Filter>
+    </ClCompile>
+    <ClInclude Include="include\desktop\internal\ProcessActionSupport.h">
+      <Filter>Source Files\desktop</Filter>
+    </ClInclude>
     <ClCompile Include="src\desktop\Gcode_postprocessing_system_GCodeActions.cpp">
       <Filter>Source Files\desktop</Filter>
     </ClCompile>
@@ -732,6 +744,9 @@
     <ClInclude Include="include\infrastructure\config\RecentDocumentStore.h">
       <Filter>Header Files\infrastructure\config</Filter>
     </ClInclude>
+    <ClInclude Include="include\infrastructure\config\AppSettings.h">
+      <Filter>Header Files\infrastructure\config</Filter>
+    </ClInclude>
     <ClInclude Include="include\infrastructure\config\MachiningParameterStore.h">
       <Filter>Header Files\infrastructure\config</Filter>
     </ClInclude>
@@ -856,6 +871,9 @@
       <Filter>Header Files\core\machine</Filter>
     </ClInclude>
     <ClInclude Include="include\core\machining\CutSurfaceExpectation.h">
+      <Filter>Header Files\core\machining</Filter>
+    </ClInclude>
+    <ClInclude Include="include\core\machining\EndCutSide.h">
       <Filter>Header Files\core\machining</Filter>
     </ClInclude>
     <ClInclude Include="include\core\machine\MachineTrajectory.h">
