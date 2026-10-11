@@ -109,7 +109,7 @@ x64/Release/
 - [加工工艺](./docs/requirements/machining-process.md)
 - [G-code 与导出](./docs/requirements/gcode-and-export.md)
 
-## 6. 加工安全
+## 7. 加工安全
 
 生成的 G-code 在实际加工前必须完成：
 
