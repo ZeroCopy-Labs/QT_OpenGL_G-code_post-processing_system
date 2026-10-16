@@ -2,12 +2,8 @@
 
 #include <QString>
 
-enum class AppEdition
-{
-    Lite,
-    Pro
-};
-
+// 授权只区分“已授权”和“未授权”：没有有效授权文件时程序无法启动，
+// 取得有效授权后即可使用全部功能，因此授权文件只包含机器码、授权编号和签名。
 enum class AppFeature
 {
     BitmapImport,
@@ -25,8 +21,6 @@ public:
 
     bool isValid() const;
     bool allows(AppFeature feature) const;
-    AppEdition edition() const;
-    QString editionName() const;
     QString licenseId() const;
     QString statusText() const;
 
@@ -36,7 +30,6 @@ private:
 
 private:
     bool m_valid = false;
-    AppEdition m_edition = AppEdition::Lite;
     QString m_licenseId;
-    QString m_message = QStringLiteral("未授权：当前按 Lite 版本运行。");
+    QString m_message = QStringLiteral("未授权：未找到授权文件。");
 };

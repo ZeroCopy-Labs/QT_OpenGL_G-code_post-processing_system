@@ -54,7 +54,6 @@ $signatureBytes = $bytes
 $signature = -join ($signatureBytes | ForEach-Object { $_.ToString("x2") })
 
 $license = [ordered]@{
-    edition = "pro"
     machineId = $MachineId
     licenseId = $LicenseId
     signature = $signature

@@ -16,12 +16,6 @@ namespace
     constexpr const char* kLicenseSecret = "GCodePostProcessingSystem.LightCommercial.2026";
     constexpr int kSignatureRounds = 4096;
 
-    QString normalizedEdition(const QString& value)
-    {
-        const QString normalized = value.trimmed().toLower();
-        return normalized == QStringLiteral("pro") ? QStringLiteral("pro") : QStringLiteral("lite");
-    }
-
     QString stableMachineSeed()
     {
 #ifdef Q_OS_WIN
@@ -64,19 +58,18 @@ AppLicense AppLicense::load()
 
     if (!document.isObject())
     {
-        license.m_message = QStringLiteral("授权文件格式无效：当前按 Lite 版本运行。");
+        license.m_message = QStringLiteral("未授权：授权文件格式无效。");
         return license;
     }
 
     const QJsonObject object = document.object();
-    const QString edition = normalizedEdition(object.value(QStringLiteral("edition")).toString());
     const QString machineId = object.value(QStringLiteral("machineId")).toString().trimmed();
     const QString licenseId = object.value(QStringLiteral("licenseId")).toString().trimmed();
     const QString signature = object.value(QStringLiteral("signature")).toString().trimmed().toLower();
 
     if (machineId.isEmpty() || licenseId.isEmpty())
     {
-        license.m_message = QStringLiteral("授权文件缺少机器码或授权编号：当前按 Lite 版本运行。");
+        license.m_message = QStringLiteral("未授权：授权文件缺少机器码或授权编号。");
         return license;
     }
 
@@ -85,20 +78,19 @@ AppLicense AppLicense::load()
 
     if (signature.isEmpty() || signature != expectedSignature)
     {
-        license.m_message = QStringLiteral("授权签名无效：当前按 Lite 版本运行。");
+        license.m_message = QStringLiteral("未授权：授权签名无效。");
         return license;
     }
 
     if (machineId != currentMachineId())
     {
-        license.m_message = QStringLiteral("授权文件不属于当前机器：当前按 Lite 版本运行。");
+        license.m_message = QStringLiteral("未授权：授权文件不属于当前机器。");
         return license;
     }
 
     license.m_valid = true;
-    license.m_edition = edition == QStringLiteral("pro") ? AppEdition::Pro : AppEdition::Lite;
     license.m_licenseId = licenseId;
-    license.m_message = QStringLiteral("%1 授权").arg(license.editionName());
+    license.m_message = QStringLiteral("已授权。");
     return license;
 }
 
@@ -115,17 +107,8 @@ bool AppLicense::isValid() const
 bool AppLicense::allows(AppFeature feature) const
 {
     Q_UNUSED(feature);
-    return m_valid && m_edition == AppEdition::Pro;
-}
-
-AppEdition AppLicense::edition() const
-{
-    return m_edition;
-}
-
-QString AppLicense::editionName() const
-{
-    return m_edition == AppEdition::Pro ? QStringLiteral("Pro") : QStringLiteral("Lite");
+    // 授权只区分“已授权/未授权”：有效授权即可使用全部功能。
+    return m_valid;
 }
 
 QString AppLicense::licenseId() const

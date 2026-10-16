@@ -1072,7 +1072,7 @@ bool Gcode_postprocessing_system::ensureFeatureAvailable(AppFeature feature, con
     }
 
     const QString machineId = AppLicense::currentMachineId();
-    const QString message = QStringLiteral("%1 属于 Pro 功能。\n\n当前授权：%2\n机器码：%3\n\n请将机器码发给软件提供方，获取 license.dat 后放到程序目录。")
+    const QString message = QStringLiteral("「%1」需要授权后才能使用。\n\n授权状态：%2\n机器码：%3\n\n请将机器码发给软件提供方，获取 license.dat 后放到程序目录，再重新启动程序。")
         .arg(actionName, m_license.statusText(), machineId);
 
     QMessageBox authorizationDialog(QMessageBox::Information,
@@ -1092,7 +1092,7 @@ bool Gcode_postprocessing_system::ensureFeatureAvailable(AppFeature feature, con
     {
         ui->openGLWidget->appendCommandMessage(machineIdCopied
             ? QStringLiteral("机器码已复制到剪贴板，可直接粘贴给软件提供方。")
-            : QStringLiteral("%1 未执行：需要 Pro 授权。").arg(actionName));
+            : QStringLiteral("%1 未执行：需要授权。").arg(actionName));
         ui->openGLWidget->refreshCommandPrompt();
     }
 
