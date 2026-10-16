@@ -8,6 +8,7 @@
 #include "cad/document/CadDocument.h"
 #include "ui/widgets/CadStatusPaneWidget.h"
 #include "ui/widgets/CadToolPanelWidget.h"
+#include "ui/widgets/CamToolPanelWidget.h"
 #include "application/export/GGenerator.h"
 #include "application/machining/RotaryTubeGeometryAnalyzer.h"
 #include "application/machining/RotaryPathTopology.h"
@@ -33,6 +34,8 @@ QT_END_NAMESPACE
 class QAction;
 class QDockWidget;
 class QMenu;
+class QTabBar;
+class QToolBar;
 class MachiningSettingsWidget;
 enum class CadHelpSection;
 
@@ -78,6 +81,14 @@ private:
         Auto,
         Force2D,
         Force3D
+    };
+
+    // 两个一级工作区：CAD 负责几何创建与编辑，CAM 负责加工规划、仿真与 NC/后处理。
+    // 视口（CadViewer）与文档（CadDocument）由两者共享，切换工作区不重建数据。
+    enum class Workspace
+    {
+        Cad,
+        Cam
     };
 
 private:
@@ -144,6 +155,10 @@ private:
     QString loadSelectedProfileId() const;
     void saveSelectedProfileId(const QString& profileId) const;
     void initializeToolPanel();
+    void initializeCamToolPanel();
+    void initializeWorkspaceSwitcher();
+    void setWorkspace(Workspace workspace);
+    void applyWorkspaceState();
     void initializeMachiningSettingsDock();
     void syncToolPanelState();
     void syncMachiningSettingsState();
@@ -254,6 +269,11 @@ private:
     CadCommandLineWidget* m_commandLineWidget = nullptr;
     CadStatusPaneWidget* m_statusPaneWidget = nullptr;
     CadToolPanelWidget* m_toolPanelWidget = nullptr;
+    CamToolPanelWidget* m_camToolPanelWidget = nullptr;
+    QToolBar* m_workspaceToolBar = nullptr;
+    QToolBar* m_camToolBar = nullptr;
+    QTabBar* m_workspaceTabBar = nullptr;
+    QMenu* m_machiningMenu = nullptr;
     QDockWidget* m_machiningSettingsDock = nullptr;
     MachiningSettingsWidget* m_machiningSettingsWidget = nullptr;
     QAction* m_lightThemeAction = nullptr;
@@ -284,6 +304,11 @@ private:
     AppThemeMode m_themeMode = AppThemeMode::Light;
     AppThemeColors m_themeColors = buildAppThemeColors(AppThemeMode::Light);
     GCodeGenerationPreference m_generationPreference = GCodeGenerationPreference::Auto;
+    Workspace m_workspace = Workspace::Cad;
+    // 进入 CAD 工作区时暂停 CAM 显示总开关，返回 CAM 时恢复。
+    bool m_camProcessVisualsVisible = true;
+    // 加工设置面板属于 CAM 工作区，记录用户在 CAM 中的显示/隐藏选择。
+    bool m_machiningDockVisibleInCamWorkspace = true;
     QString m_currentDocumentPath;
     QMap<QString, GProfile> m_loadedProfiles;
     QMap<QString, QString> m_loadedProfileNames;

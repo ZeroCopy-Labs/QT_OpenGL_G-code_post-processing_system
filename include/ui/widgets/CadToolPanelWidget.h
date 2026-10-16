@@ -15,22 +15,15 @@ class QComboBox;
 class QFrame;
 class QLabel;
 class QMenu;
-class QTabBar;
-class QTabWidget;
 class QToolButton;
 
+// CAD 工作区工具面板：绘图 / 修改 / 整理 / 图层 / 特性 / 画布显示。
+// 只承载几何创建、编辑与整理入口；加工规划与导出入口位于 CAM 工作区面板。
 class CadToolPanelWidget : public QWidget
 {
     Q_OBJECT
 
 public:
-    enum class GCodeModeSelection
-    {
-        Auto,
-        ThreeAxis,
-        FourAxisAroundA
-    };
-
     explicit CadToolPanelWidget(QWidget* parent = nullptr);
 
     void setLayerNames(const QStringList& layerNames, const QMap<QString, QColor>& layerColors);
@@ -41,15 +34,6 @@ public:
     void setMoveEnabled(bool enabled);
     void setModifyActionsEnabled(bool enabled);
     void setTheme(const AppThemeColors& theme);
-    void setGCodeModeSelection(GCodeModeSelection selection);
-    void setAvailableProfiles(const QList<QPair<QString, QString>>& profiles);
-    void setCurrentProfileSelection(const QString& profileId);
-    void setProcessVisualsVisible(bool enabled);
-    bool processVisualsVisible() const;
-    void setProcessDirectionVisible(bool enabled);
-    void setProcessOrderVisible(bool enabled);
-    void setRotaryEndCutsVisible(bool enabled);
-    void setExcludedEntitiesDimmed(bool enabled);
     void setBackgroundGridVisible(bool enabled);
 
 signals:
@@ -71,23 +55,7 @@ signals:
     void layerChangeRequested(const QString& layerName);
     void colorChangeRequested(int colorIndex);
     void importFileRequested();
-    void exportGCodeRequested();
     void deduplicateRequested();
-    void recognizeRotaryTubeSectionRequested();
-    void recognizeRotaryEndCutsRequested();
-    void removeInternalPathsRequested();
-    void machiningSettingsRequested();
-    void sortKeepDirectionRequested();
-    void smartSortRequested();
-    void gcodeModeSelectionChanged(CadToolPanelWidget::GCodeModeSelection selection);
-    void profileSelectionChanged(const QString& profileId);
-    void profileManagerRequested();
-    void profileSettingsRequested();
-    void processVisualsVisibleChanged(bool enabled);
-    void processDirectionVisibleChanged(bool enabled);
-    void processOrderVisibleChanged(bool enabled);
-    void rotaryEndCutsVisibleChanged(bool enabled);
-    void excludedEntitiesDimmedChanged(bool enabled);
     void backgroundGridVisibleChanged(bool enabled);
 
 private:
@@ -99,8 +67,7 @@ private:
     QWidget* buildModifyPanel();
     QWidget* buildLayerPanel();
     QWidget* buildPropertyPanel();
-    QWidget* buildDisplayPanel();
-    QWidget* buildMachiningPanel();
+    QWidget* buildCanvasDisplayPanel();
     void addDrawButton(QWidget* parent, const QString& text, DrawType drawType, int row, int column);
     void commitLayerChange(QComboBox* comboBox);
     void updateLayerComboIcons();
@@ -119,13 +86,6 @@ private:
     QComboBox* m_layerComboBox = nullptr;
     QComboBox* m_propertyLayerComboBox = nullptr;
     QComboBox* m_colorComboBox = nullptr;
-    QComboBox* m_gcodeModeComboBox = nullptr;
-    QComboBox* m_profileComboBox = nullptr;
-    QCheckBox* m_processVisualsCheckBox = nullptr;
-    QCheckBox* m_processDirectionCheckBox = nullptr;
-    QCheckBox* m_processOrderCheckBox = nullptr;
-    QCheckBox* m_rotaryEndCutsCheckBox = nullptr;
-    QCheckBox* m_excludedEntitiesDimmedCheckBox = nullptr;
     QCheckBox* m_backgroundGridCheckBox = nullptr;
     QMenu* m_drawMoreMenu = nullptr;
     QAction* m_drawPointAction = nullptr;
@@ -143,13 +103,7 @@ private:
     QAction* m_filletAction = nullptr;
     QAction* m_chamferAction = nullptr;
     QToolButton* m_importFileButton = nullptr;
-    QToolButton* m_exportGCodeButton = nullptr;
     QToolButton* m_deduplicateButton = nullptr;
-    QToolButton* m_sortKeepDirectionButton = nullptr;
-    QToolButton* m_smartSortButton = nullptr;
-    QToolButton* m_profileManagerButton = nullptr;
-    QToolButton* m_profileSettingsButton = nullptr;
-    QTabWidget* m_tabWidget = nullptr;
     QMap<QString, QColor> m_layerColors;
     QVector<QToolButton*> m_drawButtons;
     QVector<QFrame*> m_dividers;

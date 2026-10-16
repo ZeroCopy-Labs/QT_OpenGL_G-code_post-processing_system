@@ -2,6 +2,8 @@
 
 #include "ui/widgets/CadToolPanelWidget.h"
 
+#include "ui/widgets/ToolPanelStyle.h"
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
@@ -17,8 +19,6 @@
 #include <QPainterPath>
 #include <QSizePolicy>
 #include <QStyle>
-#include <QTabBar>
-#include <QTabWidget>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidgetAction>
@@ -27,8 +27,6 @@ namespace
 {
     constexpr int kColorByLayer = 256;
     constexpr int kColorTrueColor = -1;
-    constexpr int kPanelHeight = 112;
-    constexpr int kComboHeight = 24;
     constexpr int kRibbonButtonWidth = 58;
     constexpr int kRibbonButtonHeight = 40;
     constexpr int kFooterHeight = 18;
@@ -43,11 +41,6 @@ namespace
     void addColorOption(QComboBox* comboBox, const QString& text, int colorIndex)
     {
         comboBox->addItem(text, colorIndex);
-    }
-
-    QString cssRgb(const QColor& color)
-    {
-        return QStringLiteral("rgb(%1, %2, %3)").arg(color.red()).arg(color.green()).arg(color.blue());
     }
 
     QIcon buildRibbonIcon(DrawType drawType, const QColor& strokeColor)
@@ -719,100 +712,6 @@ void CadToolPanelWidget::setTheme(const AppThemeColors& theme)
     applyTheme();
 }
 
-void CadToolPanelWidget::setGCodeModeSelection(GCodeModeSelection selection)
-{
-    if (m_gcodeModeComboBox == nullptr)
-    {
-        return;
-    }
-
-    m_updatingUi = true;
-    m_gcodeModeComboBox->setCurrentIndex(static_cast<int>(selection));
-    m_updatingUi = false;
-}
-
-void CadToolPanelWidget::setAvailableProfiles(const QList<QPair<QString, QString>>& profiles)
-{
-    if (m_profileComboBox == nullptr)
-    {
-        return;
-    }
-
-    const QString currentProfileId = m_profileComboBox->currentData().toString();
-    m_updatingUi = true;
-    m_profileComboBox->clear();
-
-    for (const QPair<QString, QString>& profile : profiles)
-    {
-        m_profileComboBox->addItem(profile.second, profile.first);
-    }
-
-    const int currentIndex = m_profileComboBox->findData(currentProfileId);
-
-    if (currentIndex >= 0)
-    {
-        m_profileComboBox->setCurrentIndex(currentIndex);
-    }
-
-    m_updatingUi = false;
-}
-
-void CadToolPanelWidget::setCurrentProfileSelection(const QString& profileId)
-{
-    if (m_profileComboBox == nullptr)
-    {
-        return;
-    }
-
-    const int index = m_profileComboBox->findData(profileId);
-
-    if (index < 0)
-    {
-        return;
-    }
-
-    m_updatingUi = true;
-    m_profileComboBox->setCurrentIndex(index);
-    m_updatingUi = false;
-}
-
-void CadToolPanelWidget::setProcessVisualsVisible(bool enabled)
-{
-    if (m_processVisualsCheckBox == nullptr)
-    {
-        return;
-    }
-
-    m_updatingUi = true;
-    m_processVisualsCheckBox->setChecked(enabled);
-    m_updatingUi = false;
-}
-
-bool CadToolPanelWidget::processVisualsVisible() const
-{
-    return m_processVisualsCheckBox == nullptr || m_processVisualsCheckBox->isChecked();
-}
-
-void CadToolPanelWidget::setProcessDirectionVisible(bool enabled)
-{
-    if (m_processDirectionCheckBox != nullptr) m_processDirectionCheckBox->setChecked(enabled);
-}
-
-void CadToolPanelWidget::setProcessOrderVisible(bool enabled)
-{
-    if (m_processOrderCheckBox != nullptr) m_processOrderCheckBox->setChecked(enabled);
-}
-
-void CadToolPanelWidget::setRotaryEndCutsVisible(bool enabled)
-{
-    if (m_rotaryEndCutsCheckBox != nullptr) m_rotaryEndCutsCheckBox->setChecked(enabled);
-}
-
-void CadToolPanelWidget::setExcludedEntitiesDimmed(bool enabled)
-{
-    if (m_excludedEntitiesDimmedCheckBox != nullptr) m_excludedEntitiesDimmedCheckBox->setChecked(enabled);
-}
-
 void CadToolPanelWidget::setBackgroundGridVisible(bool enabled)
 {
     if (m_backgroundGridCheckBox != nullptr) m_backgroundGridCheckBox->setChecked(enabled);
@@ -873,164 +772,68 @@ void CadToolPanelWidget::buildUi()
     );
     setModifyActionsEnabled(false);
 
-    QVBoxLayout* rootLayout = new QVBoxLayout(this);
-    rootLayout->setContentsMargins(0, 0, 0, 0);
+    setObjectName(QStringLiteral("cadToolPanelRoot"));
+
+    QHBoxLayout* rootLayout = new QHBoxLayout(this);
+    rootLayout->setContentsMargins(4, 0, 4, 0);
     rootLayout->setSpacing(0);
 
-    m_tabWidget = new QTabWidget(this);
-    m_tabWidget->setDocumentMode(true);
-    m_tabWidget->tabBar()->setExpanding(false);
-    m_tabWidget->tabBar()->setUsesScrollButtons(false);
-    rootLayout->addWidget(m_tabWidget);
+    // 文件入口：导入 DXF/DWG 是 CAD 工作的起点；保存与导出保留在“文件”菜单。
+    m_importFileButton = new QToolButton(this);
+    m_importFileButton->setText(QStringLiteral("文件导入"));
+    m_importFileButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    m_importFileButton->setProperty("machiningButton", true);
+    m_importFileButton->setMinimumHeight(30);
+    m_importFileButton->setMinimumWidth(92);
+    QWidget* filePanel = new QWidget(this);
+    QGridLayout* fileLayout = new QGridLayout(filePanel);
+    fileLayout->setContentsMargins(1, 6, 1, 2);
+    fileLayout->addWidget(m_importFileButton, 0, 0);
+    fileLayout->setColumnStretch(0, 1);
+    fileLayout->setAlignment(Qt::AlignLeft | Qt::AlignTop);
 
-    QWidget* defaultTab = new QWidget(m_tabWidget);
-    QHBoxLayout* defaultLayout = new QHBoxLayout(defaultTab);
-    defaultLayout->setContentsMargins(0, 0, 0, 0);
-    defaultLayout->setSpacing(0);
-    defaultLayout->addWidget(buildPanelFrame(QStringLiteral("绘图"), buildDrawPanel(), -1, m_drawMoreMenu), 0, Qt::AlignLeft | Qt::AlignTop);
-    defaultLayout->addWidget(buildDivider(), 0, Qt::AlignLeft | Qt::AlignVCenter);
-    defaultLayout->addWidget(buildPanelFrame(QStringLiteral("修改"), buildModifyPanel(), -1, m_modifyMoreMenu), 0, Qt::AlignLeft | Qt::AlignTop);
-    defaultLayout->addWidget(buildDivider(), 0, Qt::AlignLeft | Qt::AlignVCenter);
-    defaultLayout->addWidget(buildPanelFrame(QStringLiteral("图层"), buildLayerPanel(), 176), 0, Qt::AlignLeft | Qt::AlignTop);
-    defaultLayout->addWidget(buildDivider(), 0, Qt::AlignLeft | Qt::AlignVCenter);
-    defaultLayout->addWidget(buildPanelFrame(QStringLiteral("特性"), buildPropertyPanel(), 226), 0, Qt::AlignLeft | Qt::AlignTop);
-    defaultLayout->addStretch(1);
-    m_tabWidget->addTab(defaultTab, QStringLiteral("默认"));
+    // 几何整理：去重属于几何处理，不参与加工规划。
+    m_deduplicateButton = new QToolButton(this);
+    m_deduplicateButton->setText(QStringLiteral("去重"));
+    m_deduplicateButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    m_deduplicateButton->setProperty("machiningButton", true);
+    m_deduplicateButton->setMinimumHeight(30);
+    m_deduplicateButton->setMinimumWidth(92);
+    QWidget* geometryPanel = new QWidget(this);
+    QGridLayout* geometryLayout = new QGridLayout(geometryPanel);
+    geometryLayout->setContentsMargins(1, 6, 1, 2);
+    geometryLayout->addWidget(m_deduplicateButton, 0, 0);
+    geometryLayout->setColumnStretch(0, 1);
+    geometryLayout->setAlignment(Qt::AlignLeft | Qt::AlignTop);
 
-    m_tabWidget->addTab(buildMachiningPanel(), QStringLiteral("机加工"));
+    rootLayout->addWidget(buildPanelFrame(QStringLiteral("文件"), filePanel, 112), 0, Qt::AlignLeft | Qt::AlignTop);
+    rootLayout->addWidget(buildDivider(), 0, Qt::AlignLeft | Qt::AlignVCenter);
+    rootLayout->addWidget(buildPanelFrame(QStringLiteral("绘图"), buildDrawPanel(), -1, m_drawMoreMenu), 0, Qt::AlignLeft | Qt::AlignTop);
+    rootLayout->addWidget(buildDivider(), 0, Qt::AlignLeft | Qt::AlignVCenter);
+    rootLayout->addWidget(buildPanelFrame(QStringLiteral("修改"), buildModifyPanel(), -1, m_modifyMoreMenu), 0, Qt::AlignLeft | Qt::AlignTop);
+    rootLayout->addWidget(buildDivider(), 0, Qt::AlignLeft | Qt::AlignVCenter);
+    rootLayout->addWidget(buildPanelFrame(QStringLiteral("整理"), geometryPanel, 112), 0, Qt::AlignLeft | Qt::AlignTop);
+    rootLayout->addWidget(buildDivider(), 0, Qt::AlignLeft | Qt::AlignVCenter);
+    rootLayout->addWidget(buildPanelFrame(QStringLiteral("图层"), buildLayerPanel(), 176), 0, Qt::AlignLeft | Qt::AlignTop);
+    rootLayout->addWidget(buildDivider(), 0, Qt::AlignLeft | Qt::AlignVCenter);
+    rootLayout->addWidget(buildPanelFrame(QStringLiteral("特性"), buildPropertyPanel(), 226), 0, Qt::AlignLeft | Qt::AlignTop);
+    rootLayout->addWidget(buildDivider(), 0, Qt::AlignLeft | Qt::AlignVCenter);
+    rootLayout->addWidget(buildPanelFrame(QStringLiteral("画布显示"), buildCanvasDisplayPanel(), 150), 0, Qt::AlignLeft | Qt::AlignTop);
+    rootLayout->addStretch(1);
 
-    QWidget* displayTab = new QWidget(m_tabWidget);
-    QHBoxLayout* displayLayout = new QHBoxLayout(displayTab);
-    displayLayout->setContentsMargins(0, 0, 0, 0);
-    displayLayout->addWidget(buildPanelFrame(QStringLiteral("画布显示"), buildDisplayPanel(), 430), 0, Qt::AlignLeft | Qt::AlignTop);
-    displayLayout->addStretch(1);
-    m_tabWidget->addTab(displayTab, QStringLiteral("显示"));
+    connect(m_importFileButton, &QToolButton::clicked, this, [this]() { emit importFileRequested(); });
+    connect(m_deduplicateButton, &QToolButton::clicked, this, [this]() { emit deduplicateRequested(); });
 }
 
 void CadToolPanelWidget::applyTheme()
 {
-    setStyleSheet
-    (
-        QStringLiteral
-        (
-            "#cadToolPanelRoot { background: transparent; }"
-            "QTabWidget::pane { border: none; border-top: 1px solid %4; background: transparent; margin-top: 0px; }"
-            "QTabBar::tab { background: transparent; color: %2; border: none; border-bottom: 2px solid transparent; padding: 6px 14px 5px 14px; min-width: 50px; font-size: 11px; }"
-            "QTabBar::tab:hover { background: %5; color: %1; }"
-            "QTabBar::tab:selected { background: %7; color: %1; border-bottom-color: %8; font-weight: 600; }"
-            "QWidget[ribbonPanel=\"true\"] { background: %7; border: 1px solid %4; border-radius: 4px; }"
-            "QLabel { color: %1; font-size: 10px; }"
-            "QLabel[panelTitle=\"true\"] {"
-            " color: %2;"
-            " font-size: 10px;"
-            " padding-bottom: 1px;"
-            "}"
-            "QLabel[machiningFieldLabel=\"true\"] {"
-            " color: %2;"
-            " font-size: 11px;"
-            " font-weight: 500;"
-            "}"
-            "QLabel[sectionStatus=\"true\"] { font-size: 11px; font-weight: 600; }"
-            "QLabel[sectionStatus=\"true\"][sectionRecognized=\"false\"][sectionBlinkOn=\"true\"] { color: rgb(220, 48, 48); }"
-            "QLabel[sectionStatus=\"true\"][sectionRecognized=\"false\"][sectionBlinkOn=\"false\"] { color: rgba(220, 48, 48, 45); }"
-            "QLabel[sectionStatus=\"true\"][sectionRecognized=\"true\"] { color: %8; }"
-            "QLabel[sectionValue=\"true\"] { color: %1; font-size: 10px; }"
-            "QCheckBox[machiningOption=\"true\"] {"
-            " color: %2;"
-            " font-size: 10px;"
-            " spacing: 4px;"
-            " padding: 0px 3px 0px 0px;"
-            "}"
-            "QCheckBox[machiningOption=\"true\"]::indicator {"
-            " width: 13px;"
-            " height: 13px;"
-            "}"
-            "QToolButton[panelLauncher=\"true\"] {"
-            " border: none;"
-            " padding: 0px;"
-            " margin: 0px;"
-            " color: %2;"
-            " background: transparent;"
-            "}"
-            "QToolButton[panelLauncher=\"true\"]:hover {"
-            " background: %3;"
-            " color: %1;"
-            "}"
-            "QToolButton[ribbonButton=\"true\"] {"
-            " border: 1px solid transparent;"
-            " border-radius: 4px;"
-            " padding: 2px 3px 2px 3px;"
-            " background: transparent;"
-            " color: %1;"
-            " font-size: 9px;"
-            "}"
-            "QToolButton[ribbonButton=\"true\"]:hover {"
-            " border-color: %4;"
-            " background: %5;"
-            "}"
-            "QToolButton[ribbonButton=\"true\"]:pressed {"
-            " border-color: %6;"
-            " background: %3;"
-            "}"
-            "QToolButton[machiningButton=\"true\"] {"
-            " border: 1px solid %4;"
-            " border-radius: 4px;"
-            " padding: 3px 10px;"
-            " background: %7;"
-            " color: %1;"
-            " font-size: 11px;"
-            " text-align: left;"
-            "}"
-            "QToolButton[machiningButton=\"true\"]:hover {"
-            " border-color: %6;"
-            " background: %5;"
-            "}"
-            "QToolButton[machiningButton=\"true\"]:pressed {"
-            " border-color: %6;"
-            " background: %3;"
-            "}"
-            "QComboBox {"
-            " background-color: %7;"
-            " color: %1;"
-            " border: 1px solid %4;"
-            " border-radius: 4px;"
-            " padding: 1px 22px 1px 6px;"
-            " font-size: 11px;"
-            "}"
-            "QComboBox:hover {"
-            " border-color: %6;"
-            "}"
-            "QComboBox::drop-down {"
-            " subcontrol-origin: padding;"
-            " subcontrol-position: top right;"
-            " width: 18px;"
-            " border: none;"
-            " background: transparent;"
-            "}"
-            "QComboBox QAbstractItemView {"
-            " background-color: %7;"
-            " color: %1;"
-            " border: 1px solid %4;"
-            " selection-background-color: %8;"
-            " selection-color: %9;"
-            "}"
-        )
-        .arg(cssRgb(m_theme.textPrimaryColor))
-        .arg(cssRgb(m_theme.textSecondaryColor))
-        .arg(cssRgb(m_theme.pressedBackgroundColor))
-        .arg(cssRgb(m_theme.borderColor))
-        .arg(cssRgb(m_theme.hoverBackgroundColor))
-        .arg(cssRgb(m_theme.borderStrongColor))
-        .arg(cssRgb(m_theme.surfaceBackground))
-        .arg(cssRgb(m_theme.accentColor))
-        .arg(cssRgb(m_theme.accentTextColor))
-    );
+    setStyleSheet(toolpanel::toolPanelStyleSheet(m_theme));
 
     for (QFrame* divider : m_dividers)
     {
         if (divider != nullptr)
         {
-            divider->setStyleSheet(QStringLiteral("background-color: %1;").arg(cssRgb(m_theme.borderColor)));
+            divider->setStyleSheet(QStringLiteral("background-color: %1;").arg(toolpanel::cssRgb(m_theme.borderColor)));
         }
     }
 
@@ -1139,45 +942,7 @@ void CadToolPanelWidget::applyTheme()
         m_chamferAction->setIcon(buildChamferIcon(m_theme.accentColor));
     }
 
-    const QString popupMenuStyle =
-        QStringLiteral
-        (
-            "QMenu[gridPopupMenu=\"true\"] {"
-            " background-color: %1;"
-            " border: 1px solid %3;"
-            " padding: 0px;"
-            "}"
-            "QWidget[popupGridPanel=\"true\"] {"
-            " background-color: %1;"
-            "}"
-            "QToolButton[popupGridButton=\"true\"] {"
-            " border: 1px solid transparent;"
-            " border-radius: 3px;"
-            " padding: 3px;"
-            " background: transparent;"
-            " color: %2;"
-            " font-size: 10px;"
-            "}"
-            "QToolButton[popupGridButton=\"true\"]:hover {"
-            " border-color: %4;"
-            " background: %5;"
-            "}"
-            "QToolButton[popupGridButton=\"true\"]:pressed {"
-            " border-color: %6;"
-            " background: %7;"
-            "}"
-            "QToolButton[popupGridButton=\"true\"]:disabled {"
-            " color: %8;"
-            "}"
-        )
-        .arg(cssRgb(m_theme.surfaceBackground))
-        .arg(cssRgb(m_theme.textPrimaryColor))
-        .arg(cssRgb(m_theme.borderColor))
-        .arg(cssRgb(m_theme.borderStrongColor))
-        .arg(cssRgb(m_theme.hoverBackgroundColor))
-        .arg(cssRgb(m_theme.accentColor))
-        .arg(cssRgb(m_theme.pressedBackgroundColor))
-        .arg(cssRgb(m_theme.textSecondaryColor));
+    const QString popupMenuStyle = toolpanel::toolPanelPopupMenuStyleSheet(m_theme);
 
     if (m_drawMoreMenu != nullptr)
     {
@@ -1190,13 +955,32 @@ void CadToolPanelWidget::applyTheme()
     }
 }
 
+QWidget* CadToolPanelWidget::buildCanvasDisplayPanel()
+{
+    QWidget* panel = new QWidget(this);
+    QGridLayout* layout = new QGridLayout(panel);
+    layout->setContentsMargins(2, 1, 2, 1);
+    layout->setHorizontalSpacing(8);
+    layout->setVerticalSpacing(1);
+
+    // 画布显示只保留与几何编辑相关的选项；加工方向、编号、断面标记等属于 CAM 工作区。
+    m_backgroundGridCheckBox = new QCheckBox(QStringLiteral("背景网格"), panel);
+    m_backgroundGridCheckBox->setProperty("machiningOption", true);
+    m_backgroundGridCheckBox->setChecked(true);
+    layout->addWidget(m_backgroundGridCheckBox, 0, 0);
+    layout->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+
+    connect(m_backgroundGridCheckBox, &QCheckBox::toggled, this, &CadToolPanelWidget::backgroundGridVisibleChanged);
+    return panel;
+}
+
 QWidget* CadToolPanelWidget::buildPanelFrame(const QString& title, QWidget* contentWidget, int preferredWidth, QMenu* launcherMenu, bool flexibleWidth)
 {
     QWidget* panel = new QWidget(this);
     panel->setProperty("ribbonPanel", true);
     panel->setSizePolicy(flexibleWidth ? QSizePolicy::Preferred : QSizePolicy::Fixed, QSizePolicy::Fixed);
-    panel->setMinimumHeight(kPanelHeight);
-    panel->setMaximumHeight(kPanelHeight);
+    panel->setMinimumHeight(toolpanel::kPanelHeight);
+    panel->setMaximumHeight(toolpanel::kPanelHeight);
 
     QVBoxLayout* layout = new QVBoxLayout(panel);
     layout->setContentsMargins(6, 4, 6, 0);
@@ -1387,7 +1171,7 @@ QWidget* CadToolPanelWidget::buildLayerPanel()
 
     m_layerComboBox = new QComboBox(panel);
     m_layerComboBox->setEditable(false);
-    m_layerComboBox->setFixedHeight(kComboHeight);
+    m_layerComboBox->setFixedHeight(toolpanel::kComboHeight);
     layout->addWidget(m_layerComboBox);
     layout->addStretch(1);
 
@@ -1429,7 +1213,7 @@ QWidget* CadToolPanelWidget::buildPropertyPanel()
 
     m_propertyLayerComboBox = new QComboBox(layerRowWidget);
     m_propertyLayerComboBox->setEditable(false);
-    m_propertyLayerComboBox->setFixedHeight(kComboHeight);
+    m_propertyLayerComboBox->setFixedHeight(toolpanel::kComboHeight);
     layerRowLayout->addWidget(m_propertyLayerComboBox, 1);
 
     layout->addWidget(layerRowWidget);
@@ -1466,7 +1250,7 @@ QWidget* CadToolPanelWidget::buildPropertyPanel()
     addColorOption(m_colorComboBox, QStringLiteral("灰"), 8);
     addColorOption(m_colorComboBox, QStringLiteral("浅灰"), 9);
     addColorOption(m_colorComboBox, QStringLiteral("真彩色"), kColorTrueColor);
-    m_colorComboBox->setFixedHeight(kComboHeight);
+    m_colorComboBox->setFixedHeight(toolpanel::kComboHeight);
     colorRowLayout->addWidget(m_colorComboBox, 1);
 
     layout->addWidget(colorRowWidget);
@@ -1485,243 +1269,6 @@ QWidget* CadToolPanelWidget::buildPropertyPanel()
             }
 
             emit colorChangeRequested(m_colorComboBox->itemData(index).toInt());
-        }
-    );
-
-    return panel;
-}
-
-QWidget* CadToolPanelWidget::buildDisplayPanel()
-{
-    QWidget* panel = new QWidget(this);
-    QGridLayout* layout = new QGridLayout(panel);
-    layout->setContentsMargins(2, 1, 2, 1);
-    layout->setHorizontalSpacing(18);
-    layout->setVerticalSpacing(1);
-
-    m_processVisualsCheckBox = new QCheckBox(QStringLiteral("显示机加工相关"), panel);
-    m_processVisualsCheckBox->setProperty("machiningOption", true);
-    m_processVisualsCheckBox->setToolTip(QStringLiteral("总开关，仅影响画布显示，不影响排序和 G 代码输出"));
-    m_processVisualsCheckBox->setChecked(true);
-    m_backgroundGridCheckBox = new QCheckBox(QStringLiteral("背景网格"), panel);
-    m_processDirectionCheckBox = new QCheckBox(QStringLiteral("加工方向箭头"), panel);
-    m_processOrderCheckBox = new QCheckBox(QStringLiteral("加工顺序编号"), panel);
-    m_rotaryEndCutsCheckBox = new QCheckBox(QStringLiteral("加工断面标记"), panel);
-    m_excludedEntitiesDimmedCheckBox = new QCheckBox(QStringLiteral("废弃区域弱化"), panel);
-
-    const QList<QCheckBox*> defaultChecked
-    {
-        m_backgroundGridCheckBox,
-        m_processDirectionCheckBox,
-        m_processOrderCheckBox,
-        m_rotaryEndCutsCheckBox,
-        m_excludedEntitiesDimmedCheckBox
-    };
-    for (QCheckBox* checkBox : defaultChecked)
-    {
-        checkBox->setChecked(true);
-    }
-
-    layout->addWidget(m_processVisualsCheckBox, 0, 0);
-    layout->addWidget(m_backgroundGridCheckBox, 0, 1);
-    layout->addWidget(m_processDirectionCheckBox, 1, 0);
-    layout->addWidget(m_processOrderCheckBox, 1, 1);
-    layout->addWidget(m_rotaryEndCutsCheckBox, 2, 0);
-    layout->addWidget(m_excludedEntitiesDimmedCheckBox, 2, 1);
-
-    QToolButton* resetButton = new QToolButton(panel);
-    resetButton->setText(QStringLiteral("恢复默认显示"));
-    resetButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    resetButton->setProperty("machiningButton", true);
-    layout->addWidget(resetButton, 3, 0, 1, 2, Qt::AlignLeft);
-
-    const auto updateMachiningOptionState = [this](bool enabled)
-    {
-        m_processDirectionCheckBox->setEnabled(enabled);
-        m_processOrderCheckBox->setEnabled(enabled);
-        m_rotaryEndCutsCheckBox->setEnabled(enabled);
-        m_excludedEntitiesDimmedCheckBox->setEnabled(enabled);
-    };
-
-    connect(m_processVisualsCheckBox, &QCheckBox::toggled, this, [this, updateMachiningOptionState](bool checked)
-    {
-        updateMachiningOptionState(checked);
-        if (!m_updatingUi)
-        {
-            emit processVisualsVisibleChanged(checked);
-        }
-    });
-    connect(m_processDirectionCheckBox, &QCheckBox::toggled, this, &CadToolPanelWidget::processDirectionVisibleChanged);
-    connect(m_processOrderCheckBox, &QCheckBox::toggled, this, &CadToolPanelWidget::processOrderVisibleChanged);
-    connect(m_rotaryEndCutsCheckBox, &QCheckBox::toggled, this, &CadToolPanelWidget::rotaryEndCutsVisibleChanged);
-    connect(m_excludedEntitiesDimmedCheckBox, &QCheckBox::toggled, this, &CadToolPanelWidget::excludedEntitiesDimmedChanged);
-    connect(m_backgroundGridCheckBox, &QCheckBox::toggled, this, &CadToolPanelWidget::backgroundGridVisibleChanged);
-    connect(resetButton, &QToolButton::clicked, this, [this]()
-    {
-        m_processVisualsCheckBox->setChecked(true);
-        m_backgroundGridCheckBox->setChecked(true);
-        m_processDirectionCheckBox->setChecked(true);
-        m_processOrderCheckBox->setChecked(true);
-        m_rotaryEndCutsCheckBox->setChecked(true);
-        m_excludedEntitiesDimmedCheckBox->setChecked(true);
-    });
-
-    return panel;
-}
-
-QWidget* CadToolPanelWidget::buildMachiningPanel()
-{
-    QWidget* panel = new QWidget(this);
-    QHBoxLayout* rootLayout = new QHBoxLayout(panel);
-    rootLayout->setContentsMargins(4, 0, 4, 0);
-    rootLayout->setSpacing(0);
-    rootLayout->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-
-    auto buildMachiningButton =
-        [panel](const QString& text)
-        {
-            QToolButton* button = new QToolButton(panel);
-            button->setText(text);
-            button->setToolButtonStyle(Qt::ToolButtonTextOnly);
-            button->setProperty("machiningButton", true);
-            button->setMinimumHeight(30);
-            button->setMinimumWidth(92);
-            button->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
-            return button;
-        };
-
-    m_importFileButton = buildMachiningButton(QStringLiteral("文件导入"));
-    m_exportGCodeButton = buildMachiningButton(QStringLiteral("G代码导出"));
-    m_deduplicateButton = buildMachiningButton(QStringLiteral("去重"));
-    QToolButton* recognizeSectionButton = buildMachiningButton(QStringLiteral("识别方管截面"));
-    QToolButton* recognizeEndCutsButton = buildMachiningButton(QStringLiteral("识别加工断面"));
-    QToolButton* removeInternalPathsButton = buildMachiningButton(QStringLiteral("清理内部线条"));
-    m_sortKeepDirectionButton = buildMachiningButton(QStringLiteral("排序(保留方向)"));
-    m_smartSortButton = buildMachiningButton(QStringLiteral("智能排序"));
-    m_profileSettingsButton = buildMachiningButton(QStringLiteral("G代码配置"));
-    QToolButton* machiningSettingsButton = buildMachiningButton(QStringLiteral("加工设置"));
-
-    QWidget* importPanel = new QWidget(panel);
-    QGridLayout* importLayout = new QGridLayout(importPanel);
-    importLayout->setContentsMargins(1, 6, 1, 2);
-    importLayout->setHorizontalSpacing(6);
-    importLayout->setVerticalSpacing(6);
-    importLayout->addWidget(m_importFileButton, 0, 0, 1, 2);
-    importLayout->addWidget(m_exportGCodeButton, 1, 0, 1, 2);
-    importLayout->setColumnStretch(0, 1);
-    importLayout->setColumnStretch(1, 1);
-    importLayout->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-
-    QWidget* sortPanel = new QWidget(panel);
-    QGridLayout* sortLayout = new QGridLayout(sortPanel);
-    sortLayout->setContentsMargins(1, 6, 1, 2);
-    sortLayout->setHorizontalSpacing(6);
-    sortLayout->setVerticalSpacing(6);
-    sortLayout->addWidget(m_sortKeepDirectionButton, 0, 0);
-    sortLayout->addWidget(m_smartSortButton, 1, 0);
-    sortLayout->setColumnStretch(0, 1);
-    sortLayout->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-
-    QWidget* geometryPanel = new QWidget(panel);
-    QGridLayout* geometryLayout = new QGridLayout(geometryPanel);
-    geometryLayout->setContentsMargins(1, 6, 1, 2);
-    geometryLayout->setHorizontalSpacing(6);
-    geometryLayout->setVerticalSpacing(6);
-    geometryLayout->addWidget(m_deduplicateButton, 0, 0);
-    geometryLayout->addWidget(recognizeSectionButton, 0, 1);
-    geometryLayout->addWidget(recognizeEndCutsButton, 1, 0);
-    geometryLayout->addWidget(removeInternalPathsButton, 1, 1);
-    geometryLayout->setColumnStretch(0, 1);
-    geometryLayout->setColumnStretch(1, 1);
-
-    QWidget* configPanel = new QWidget(panel);
-    QGridLayout* configLayout = new QGridLayout(configPanel);
-    configLayout->setContentsMargins(2, 6, 2, 2);
-    configLayout->setHorizontalSpacing(6);
-    configLayout->setVerticalSpacing(4);
-    configPanel->setMaximumWidth(310);
-
-    m_profileManagerButton = new QToolButton(configPanel);
-    m_profileManagerButton->setText(QStringLiteral("当前配置"));
-    m_profileManagerButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    m_profileManagerButton->setProperty("machiningButton", true);
-    m_profileManagerButton->setToolTip(QStringLiteral("管理配置文件与检索路径"));
-    m_profileManagerButton->setFixedHeight(kComboHeight);
-    m_profileManagerButton->setMinimumWidth(76);
-    m_profileManagerButton->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
-    m_profileComboBox = new QComboBox(configPanel);
-    m_profileComboBox->setEditable(false);
-    m_profileComboBox->setFixedHeight(kComboHeight);
-    m_profileComboBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    configLayout->addWidget(m_profileManagerButton, 0, 0);
-    configLayout->addWidget(m_profileComboBox, 0, 1, 1, 2);
-
-    QLabel* modeLabel = new QLabel(QStringLiteral("G代码模式"), configPanel);
-    modeLabel->setProperty("machiningFieldLabel", true);
-    modeLabel->setMinimumWidth(54);
-    m_gcodeModeComboBox = new QComboBox(configPanel);
-    m_gcodeModeComboBox->setEditable(false);
-    m_gcodeModeComboBox->setFixedHeight(kComboHeight);
-    m_gcodeModeComboBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    m_gcodeModeComboBox->addItem(QStringLiteral("自动"), static_cast<int>(GCodeModeSelection::Auto));
-    m_gcodeModeComboBox->addItem(QStringLiteral("3轴"), static_cast<int>(GCodeModeSelection::ThreeAxis));
-    m_gcodeModeComboBox->addItem(QStringLiteral("4轴(绕A)"), static_cast<int>(GCodeModeSelection::FourAxisAroundA));
-    configLayout->addWidget(modeLabel, 1, 0);
-    configLayout->addWidget(m_gcodeModeComboBox, 1, 1, 1, 2);
-    configLayout->addWidget(m_profileSettingsButton, 2, 0);
-    configLayout->addWidget(machiningSettingsButton, 2, 1, 1, 2);
-    configLayout->setColumnStretch(1, 1);
-
-    rootLayout->addWidget(buildPanelFrame(QStringLiteral("导入导出"), importPanel, 182, nullptr, false), 0);
-    rootLayout->addWidget(buildDivider(), 0, Qt::AlignLeft | Qt::AlignVCenter);
-    rootLayout->addWidget(buildPanelFrame(QStringLiteral("排序"), sortPanel, 132, nullptr, false), 0);
-    rootLayout->addWidget(buildDivider(), 0, Qt::AlignLeft | Qt::AlignVCenter);
-    rootLayout->addWidget(buildPanelFrame(QStringLiteral("几何处理"), geometryPanel, 220, nullptr, true), 0);
-    rootLayout->addWidget(buildDivider(), 0, Qt::AlignLeft | Qt::AlignVCenter);
-    QWidget* configFrame = buildPanelFrame(QStringLiteral("配置"), configPanel, 250, nullptr, true);
-    configFrame->setMaximumWidth(320);
-    rootLayout->addWidget(configFrame, 0);
-    rootLayout->addStretch(1);
-
-    connect(m_importFileButton, &QToolButton::clicked, this, [this]() { emit importFileRequested(); });
-    connect(m_exportGCodeButton, &QToolButton::clicked, this, [this]() { emit exportGCodeRequested(); });
-    connect(m_deduplicateButton, &QToolButton::clicked, this, [this]() { emit deduplicateRequested(); });
-    connect(recognizeSectionButton, &QToolButton::clicked, this, [this]() { emit recognizeRotaryTubeSectionRequested(); });
-    connect(recognizeEndCutsButton, &QToolButton::clicked, this, [this]() { emit recognizeRotaryEndCutsRequested(); });
-    connect(removeInternalPathsButton, &QToolButton::clicked, this, [this]() { emit removeInternalPathsRequested(); });
-    connect(machiningSettingsButton, &QToolButton::clicked, this, [this]() { emit machiningSettingsRequested(); });
-    connect(m_sortKeepDirectionButton, &QToolButton::clicked, this, [this]() { emit sortKeepDirectionRequested(); });
-    connect(m_smartSortButton, &QToolButton::clicked, this, [this]() { emit smartSortRequested(); });
-    connect(m_profileManagerButton, &QToolButton::clicked, this, [this]() { emit profileManagerRequested(); });
-    connect(m_profileSettingsButton, &QToolButton::clicked, this, [this]() { emit profileSettingsRequested(); });
-    connect
-    (
-        m_profileComboBox,
-        &QComboBox::currentIndexChanged,
-        this,
-        [this](int index)
-        {
-            if (m_updatingUi || index < 0)
-            {
-                return;
-            }
-
-            emit profileSelectionChanged(m_profileComboBox->itemData(index).toString());
-        }
-    );
-    connect
-    (
-        m_gcodeModeComboBox,
-        &QComboBox::currentIndexChanged,
-        this,
-        [this](int index)
-        {
-            if (m_updatingUi || index < 0)
-            {
-                return;
-            }
-
-            emit gcodeModeSelectionChanged(static_cast<GCodeModeSelection>(index));
         }
     );
 

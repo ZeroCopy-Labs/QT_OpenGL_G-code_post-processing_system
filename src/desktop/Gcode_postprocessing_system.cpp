@@ -30,11 +30,13 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QSettings>
+#include <QSignalBlocker>
 #include <QStatusBar>
 #include <QStyleFactory>
 #include <QStandardPaths>
 #include <QSet>
 #include <QTimer>
+#include <QTabBar>
 #include <QToolBar>
 #include <QVariant>
 #include <QVBoxLayout>
@@ -575,9 +577,10 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
     ui->menuEdit->addAction(filletAction);
     ui->menuEdit->addAction(chamferAction);
 
-    // 独立“机加工”菜单：按方管四轴工作流顺序分组（截面 → 内部线 → 加工断面 → 排序 → 导出）。
+    // 独立“机加工”菜单：CAM 工作区入口，按方管四轴工作流顺序分组（截面 → 内部线 → 加工断面 → 排序 → 导出）。
     QMenu* machiningMenu = new QMenu(QStringLiteral("机加工"), this);
-    menuBar()->insertMenu(ui->menuSort->menuAction(), machiningMenu);
+    menuBar()->insertMenu(ui->menuSet->menuAction(), machiningMenu);
+    m_machiningMenu = machiningMenu;
     machiningMenu->addSection(QStringLiteral("截面"));
     machiningMenu->addAction(recognizeRotaryTubeSectionAction);
     machiningMenu->addAction(applyManualSectionAction);
@@ -589,11 +592,17 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
     machiningMenu->addAction(recognizeAllRotaryEndCutsAction);
     machiningMenu->addAction(clearSelectedRotaryEndCutAssignmentsAction);
     machiningMenu->addAction(clearRotaryEndCutAssignmentsAction);
-    machiningMenu->addSection(QStringLiteral("排序"));
+    machiningMenu->addSection(QStringLiteral("排序与方向"));
     machiningMenu->addAction(ui->action_Sort_2D_Assign);
     machiningMenu->addAction(ui->action_Sort_2D_Smart);
+    machiningMenu->addAction(ui->action_Edit_ReversePeocess);
     machiningMenu->addSection(QStringLiteral("导出"));
     machiningMenu->addAction(ui->action_File_Export_G);
+
+    // “反向加工”写入加工方向偏好，属于 CAM 规划，因此从“编辑”菜单迁入“机加工”菜单。
+    ui->menuEdit->removeAction(ui->action_Edit_ReversePeocess);
+    // “排序”菜单内容与“机加工 → 排序与方向”重复，CAM 入口统一保留在“机加工”菜单。
+    menuBar()->removeAction(ui->menuSort->menuAction());
 
     ui->action_File_Export_G->setText(QStringLiteral("导出G代码"));
 
@@ -657,6 +666,8 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
     initializeHelpMenu();
     initializeMachiningSettingsDock();
     initializeToolPanel();
+    initializeCamToolPanel();
+    initializeWorkspaceSwitcher();
 
     QSettings windowSettings = makeAppSettings();
     restoreGeometry(windowSettings.value(QStringLiteral("ui/mainWindowGeometry")).toByteArray());
@@ -668,9 +679,13 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
         m_machiningSettingsDock->show();
     }
 
+    m_machiningDockVisibleInCamWorkspace = m_machiningSettingsDock->isVisible();
+
     applyDefaultDrawingProperties();
     applyTheme(loadThemeMode());
     syncToolPanelState();
+    // 启动默认进入 CAD 工作区：几何编辑是加工规划之前的必经步骤。
+    setWorkspace(Workspace::Cad);
 }
 
 Gcode_postprocessing_system::~Gcode_postprocessing_system()
@@ -1352,8 +1367,14 @@ void Gcode_postprocessing_system::refreshAvailableProfilesUi()
         profiles.append(qMakePair(profileId, m_loadedProfileNames.value(profileId, QStringLiteral("未命名配置"))));
     }
 
-    m_toolPanelWidget->setAvailableProfiles(profiles);
-    m_toolPanelWidget->setCurrentProfileSelection(m_activeProfileId);
+    if (m_camToolPanelWidget != nullptr)
+    {
+        m_camToolPanelWidget->setAvailableProfiles(profiles);
+    }
+    if (m_camToolPanelWidget != nullptr)
+    {
+        m_camToolPanelWidget->setCurrentProfileSelection(m_activeProfileId);
+    }
 }
 
 bool Gcode_postprocessing_system::applyLoadedProfileById(const QString& profileId, bool announceChange)
@@ -1483,6 +1504,11 @@ void Gcode_postprocessing_system::applyThemeColors(const AppThemeColors& theme, 
     if (m_toolPanelWidget != nullptr)
     {
         m_toolPanelWidget->setTheme(theme);
+
+    if (m_camToolPanelWidget != nullptr)
+    {
+        m_camToolPanelWidget->setTheme(theme);
+    }
     }
 
     if (ui->openGLWidget != nullptr)
@@ -1816,13 +1842,22 @@ void Gcode_postprocessing_system::applyGenerationPreference(GCodeGenerationPrefe
         switch (m_generationPreference)
         {
         case GCodeGenerationPreference::Auto:
-            m_toolPanelWidget->setGCodeModeSelection(CadToolPanelWidget::GCodeModeSelection::Auto);
+            if (m_camToolPanelWidget != nullptr)
+        {
+            m_camToolPanelWidget->setGCodeModeSelection(CamToolPanelWidget::GCodeModeSelection::Auto);
+        }
             break;
         case GCodeGenerationPreference::Force2D:
-            m_toolPanelWidget->setGCodeModeSelection(CadToolPanelWidget::GCodeModeSelection::ThreeAxis);
+            if (m_camToolPanelWidget != nullptr)
+        {
+            m_camToolPanelWidget->setGCodeModeSelection(CamToolPanelWidget::GCodeModeSelection::ThreeAxis);
+        }
             break;
         case GCodeGenerationPreference::Force3D:
-            m_toolPanelWidget->setGCodeModeSelection(CadToolPanelWidget::GCodeModeSelection::FourAxisAroundA);
+            if (m_camToolPanelWidget != nullptr)
+        {
+            m_camToolPanelWidget->setGCodeModeSelection(CamToolPanelWidget::GCodeModeSelection::FourAxisAroundA);
+        }
             break;
         default:
             break;
@@ -2064,26 +2099,12 @@ void Gcode_postprocessing_system::initializeMachiningSettingsDock()
 void Gcode_postprocessing_system::initializeToolPanel()
 {
     m_toolPanelWidget = new CadToolPanelWidget(this);
-    const bool processVisualsVisible = loadProcessVisualsVisible();
-    m_toolPanelWidget->setProcessVisualsVisible(processVisualsVisible);
-    ui->openGLWidget->setProcessVisualsVisible(processVisualsVisible);
-    const bool processDirectionVisible = loadDisplayOption(QStringLiteral("processDirection"));
-    const bool processOrderVisible = loadDisplayOption(QStringLiteral("processOrder"));
-    const bool rotaryEndCutsVisible = loadDisplayOption(QStringLiteral("rotaryEndCuts"));
-    const bool excludedEntitiesDimmed = loadDisplayOption(QStringLiteral("excludedEntitiesDimmed"));
     const bool backgroundGridVisible = loadDisplayOption(QStringLiteral("backgroundGrid"));
-    m_toolPanelWidget->setProcessDirectionVisible(processDirectionVisible);
-    m_toolPanelWidget->setProcessOrderVisible(processOrderVisible);
-    m_toolPanelWidget->setRotaryEndCutsVisible(rotaryEndCutsVisible);
-    m_toolPanelWidget->setExcludedEntitiesDimmed(excludedEntitiesDimmed);
     m_toolPanelWidget->setBackgroundGridVisible(backgroundGridVisible);
-    ui->openGLWidget->setProcessDirectionVisible(processDirectionVisible);
-    ui->openGLWidget->setProcessOrderVisible(processOrderVisible);
-    ui->openGLWidget->setRotaryEndCutsVisible(rotaryEndCutsVisible);
-    ui->openGLWidget->setExcludedEntitiesDimmed(excludedEntitiesDimmed);
     ui->openGLWidget->setBackgroundGridVisible(backgroundGridVisible);
     ui->mainToolBar->setMovable(false);
     ui->mainToolBar->setFloatable(false);
+    ui->mainToolBar->setObjectName(QStringLiteral("cadToolBar"));
     ui->mainToolBar->addWidget(m_toolPanelWidget);
 
     connect(&m_document, &CadDocument::sceneChanged, this, [this]()
@@ -2138,92 +2159,12 @@ void Gcode_postprocessing_system::initializeToolPanel()
     connect(m_toolPanelWidget, &CadToolPanelWidget::filletRequested, this, [this]() { filletSelectedEntities(); });
     connect(m_toolPanelWidget, &CadToolPanelWidget::chamferRequested, this, [this]() { chamferSelectedEntities(); });
     connect(m_toolPanelWidget, &CadToolPanelWidget::importFileRequested, this, [this]() { ui->action_File_Import_Dxf->trigger(); });
-    connect(m_toolPanelWidget, &CadToolPanelWidget::exportGCodeRequested, this, [this]() { ui->action_File_Export_G->trigger(); });
     connect(m_toolPanelWidget, &CadToolPanelWidget::deduplicateRequested, this, [this]() { removeDuplicateEntities(); });
-    connect(m_toolPanelWidget, &CadToolPanelWidget::recognizeRotaryTubeSectionRequested, this, [this]() { recognizeRotaryTubeSection(true); });
-    connect(m_toolPanelWidget, &CadToolPanelWidget::recognizeRotaryEndCutsRequested, this, [this]() { recognizeAllRotaryEndCuts(true); });
-    connect(m_toolPanelWidget, &CadToolPanelWidget::removeInternalPathsRequested, this, [this]() { removeInternalMachiningPaths(true); });
-    connect(m_toolPanelWidget, &CadToolPanelWidget::machiningSettingsRequested, this, [this]()
-    {
-        if (m_machiningSettingsDock != nullptr)
-        {
-            m_machiningSettingsDock->show();
-            m_machiningSettingsDock->raise();
-        }
-    });
-    connect
-    (
-        m_toolPanelWidget,
-        &CadToolPanelWidget::processVisualsVisibleChanged,
-        this,
-        [this](bool enabled)
-        {
-            ui->openGLWidget->setProcessVisualsVisible(enabled);
-            saveProcessVisualsVisible(enabled);
-        }
-    );
-    connect(m_toolPanelWidget, &CadToolPanelWidget::processDirectionVisibleChanged, this, [this](bool enabled)
-    {
-        ui->openGLWidget->setProcessDirectionVisible(enabled);
-        saveDisplayOption(QStringLiteral("processDirection"), enabled);
-    });
-    connect(m_toolPanelWidget, &CadToolPanelWidget::processOrderVisibleChanged, this, [this](bool enabled)
-    {
-        ui->openGLWidget->setProcessOrderVisible(enabled);
-        saveDisplayOption(QStringLiteral("processOrder"), enabled);
-    });
-    connect(m_toolPanelWidget, &CadToolPanelWidget::rotaryEndCutsVisibleChanged, this, [this](bool enabled)
-    {
-        ui->openGLWidget->setRotaryEndCutsVisible(enabled);
-        saveDisplayOption(QStringLiteral("rotaryEndCuts"), enabled);
-    });
-    connect(m_toolPanelWidget, &CadToolPanelWidget::excludedEntitiesDimmedChanged, this, [this](bool enabled)
-    {
-        ui->openGLWidget->setExcludedEntitiesDimmed(enabled);
-        saveDisplayOption(QStringLiteral("excludedEntitiesDimmed"), enabled);
-    });
     connect(m_toolPanelWidget, &CadToolPanelWidget::backgroundGridVisibleChanged, this, [this](bool enabled)
     {
         ui->openGLWidget->setBackgroundGridVisible(enabled);
         saveDisplayOption(QStringLiteral("backgroundGrid"), enabled);
     });
-    connect(m_toolPanelWidget, &CadToolPanelWidget::sortKeepDirectionRequested, this, [this]() { ui->action_Sort_2D_Assign->trigger(); });
-    connect(m_toolPanelWidget, &CadToolPanelWidget::smartSortRequested, this, [this]() { ui->action_Sort_2D_Smart->trigger(); });
-    connect
-    (
-        m_toolPanelWidget,
-        &CadToolPanelWidget::profileSelectionChanged,
-        this,
-        [this](const QString& profileId)
-        {
-            applyLoadedProfileById(profileId);
-        }
-    );
-    connect(m_toolPanelWidget, &CadToolPanelWidget::profileSettingsRequested, this, [this]() { openProfileSettingsDialog(); });
-    connect(m_toolPanelWidget, &CadToolPanelWidget::profileManagerRequested, this, [this]() { openProfileManagerDialog(); });
-    connect
-    (
-        m_toolPanelWidget,
-        &CadToolPanelWidget::gcodeModeSelectionChanged,
-        this,
-        [this](CadToolPanelWidget::GCodeModeSelection selection)
-        {
-            switch (selection)
-            {
-            case CadToolPanelWidget::GCodeModeSelection::Auto:
-                applyGenerationPreference(GCodeGenerationPreference::Auto);
-                break;
-            case CadToolPanelWidget::GCodeModeSelection::ThreeAxis:
-                applyGenerationPreference(GCodeGenerationPreference::Force2D);
-                break;
-            case CadToolPanelWidget::GCodeModeSelection::FourAxisAroundA:
-                applyGenerationPreference(GCodeGenerationPreference::Force3D);
-                break;
-            default:
-                break;
-            }
-        }
-    );
 
     connect
     (
@@ -2328,19 +2269,249 @@ void Gcode_postprocessing_system::initializeToolPanel()
     switch (m_generationPreference)
     {
     case GCodeGenerationPreference::Auto:
-        m_toolPanelWidget->setGCodeModeSelection(CadToolPanelWidget::GCodeModeSelection::Auto);
+        if (m_camToolPanelWidget != nullptr)
+        {
+            m_camToolPanelWidget->setGCodeModeSelection(CamToolPanelWidget::GCodeModeSelection::Auto);
+        }
         break;
     case GCodeGenerationPreference::Force2D:
-        m_toolPanelWidget->setGCodeModeSelection(CadToolPanelWidget::GCodeModeSelection::ThreeAxis);
+        if (m_camToolPanelWidget != nullptr)
+        {
+            m_camToolPanelWidget->setGCodeModeSelection(CamToolPanelWidget::GCodeModeSelection::ThreeAxis);
+        }
         break;
     case GCodeGenerationPreference::Force3D:
-        m_toolPanelWidget->setGCodeModeSelection(CadToolPanelWidget::GCodeModeSelection::FourAxisAroundA);
+        if (m_camToolPanelWidget != nullptr)
+        {
+            m_camToolPanelWidget->setGCodeModeSelection(CamToolPanelWidget::GCodeModeSelection::FourAxisAroundA);
+        }
         break;
     default:
         break;
     }
 
     refreshAvailableProfilesUi();
+}
+
+void Gcode_postprocessing_system::initializeCamToolPanel()
+{
+    m_camToolPanelWidget = new CamToolPanelWidget(this);
+
+    const bool processVisualsVisible = loadProcessVisualsVisible();
+    m_camToolPanelWidget->setProcessVisualsVisible(processVisualsVisible);
+    ui->openGLWidget->setProcessVisualsVisible(processVisualsVisible);
+    const bool processDirectionVisible = loadDisplayOption(QStringLiteral("processDirection"));
+    const bool processOrderVisible = loadDisplayOption(QStringLiteral("processOrder"));
+    const bool rotaryEndCutsVisible = loadDisplayOption(QStringLiteral("rotaryEndCuts"));
+    const bool excludedEntitiesDimmed = loadDisplayOption(QStringLiteral("excludedEntitiesDimmed"));
+    m_camToolPanelWidget->setProcessDirectionVisible(processDirectionVisible);
+    m_camToolPanelWidget->setProcessOrderVisible(processOrderVisible);
+    m_camToolPanelWidget->setRotaryEndCutsVisible(rotaryEndCutsVisible);
+    m_camToolPanelWidget->setExcludedEntitiesDimmed(excludedEntitiesDimmed);
+    ui->openGLWidget->setProcessDirectionVisible(processDirectionVisible);
+    ui->openGLWidget->setProcessOrderVisible(processOrderVisible);
+    ui->openGLWidget->setRotaryEndCutsVisible(rotaryEndCutsVisible);
+    ui->openGLWidget->setExcludedEntitiesDimmed(excludedEntitiesDimmed);
+
+    m_camToolBar = new QToolBar(QStringLiteral("机加工"), this);
+    m_camToolBar->setObjectName(QStringLiteral("camToolBar"));
+    m_camToolBar->setMovable(false);
+    m_camToolBar->setFloatable(false);
+    m_camToolBar->addWidget(m_camToolPanelWidget);
+    addToolBar(Qt::TopToolBarArea, m_camToolBar);
+
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::exportGCodeRequested, this, [this]() { ui->action_File_Export_G->trigger(); });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::recognizeRotaryTubeSectionRequested, this, [this]() { recognizeRotaryTubeSection(true); });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::recognizeRotaryEndCutsRequested, this, [this]() { recognizeAllRotaryEndCuts(true); });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::removeInternalPathsRequested, this, [this]() { removeInternalMachiningPaths(true); });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::machiningSettingsRequested, this, [this]()
+    {
+        if (m_machiningSettingsDock != nullptr)
+        {
+            m_machiningSettingsDock->show();
+            m_machiningSettingsDock->raise();
+        }
+    });
+    connect
+    (
+        m_camToolPanelWidget,
+        &CamToolPanelWidget::processVisualsVisibleChanged,
+        this,
+        [this](bool enabled)
+        {
+            ui->openGLWidget->setProcessVisualsVisible(enabled);
+            saveProcessVisualsVisible(enabled);
+        }
+    );
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::processDirectionVisibleChanged, this, [this](bool enabled)
+    {
+        ui->openGLWidget->setProcessDirectionVisible(enabled);
+        saveDisplayOption(QStringLiteral("processDirection"), enabled);
+    });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::processOrderVisibleChanged, this, [this](bool enabled)
+    {
+        ui->openGLWidget->setProcessOrderVisible(enabled);
+        saveDisplayOption(QStringLiteral("processOrder"), enabled);
+    });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::rotaryEndCutsVisibleChanged, this, [this](bool enabled)
+    {
+        ui->openGLWidget->setRotaryEndCutsVisible(enabled);
+        saveDisplayOption(QStringLiteral("rotaryEndCuts"), enabled);
+    });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::excludedEntitiesDimmedChanged, this, [this](bool enabled)
+    {
+        ui->openGLWidget->setExcludedEntitiesDimmed(enabled);
+        saveDisplayOption(QStringLiteral("excludedEntitiesDimmed"), enabled);
+    });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::sortKeepDirectionRequested, this, [this]() { ui->action_Sort_2D_Assign->trigger(); });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::smartSortRequested, this, [this]() { ui->action_Sort_2D_Smart->trigger(); });
+    connect
+    (
+        m_camToolPanelWidget,
+        &CamToolPanelWidget::profileSelectionChanged,
+        this,
+        [this](const QString& profileId)
+        {
+            applyLoadedProfileById(profileId);
+        }
+    );
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::profileSettingsRequested, this, [this]() { openProfileSettingsDialog(); });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::profileManagerRequested, this, [this]() { openProfileManagerDialog(); });
+    connect
+    (
+        m_camToolPanelWidget,
+        &CamToolPanelWidget::gcodeModeSelectionChanged,
+        this,
+        [this](CamToolPanelWidget::GCodeModeSelection selection)
+        {
+            switch (selection)
+            {
+            case CamToolPanelWidget::GCodeModeSelection::Auto:
+                applyGenerationPreference(GCodeGenerationPreference::Auto);
+                break;
+            case CamToolPanelWidget::GCodeModeSelection::ThreeAxis:
+                applyGenerationPreference(GCodeGenerationPreference::Force2D);
+                break;
+            case CamToolPanelWidget::GCodeModeSelection::FourAxisAroundA:
+                applyGenerationPreference(GCodeGenerationPreference::Force3D);
+                break;
+            default:
+                break;
+            }
+        }
+    );
+}
+
+void Gcode_postprocessing_system::initializeWorkspaceSwitcher()
+{
+    m_workspaceToolBar = new QToolBar(QStringLiteral("工作区"), this);
+    m_workspaceToolBar->setObjectName(QStringLiteral("workspaceToolBar"));
+    m_workspaceToolBar->setMovable(false);
+    m_workspaceToolBar->setFloatable(false);
+
+    m_workspaceTabBar = new QTabBar(m_workspaceToolBar);
+    m_workspaceTabBar->setObjectName(QStringLiteral("workspaceTabBar"));
+    m_workspaceTabBar->setDocumentMode(true);
+    m_workspaceTabBar->setDrawBase(false);
+    m_workspaceTabBar->setExpanding(false);
+    m_workspaceTabBar->addTab(QStringLiteral("CAD"));
+    m_workspaceTabBar->addTab(QStringLiteral("CAM"));
+    m_workspaceTabBar->setTabToolTip(0, QStringLiteral("CAD 工作区：几何创建、编辑与整理"));
+    m_workspaceTabBar->setTabToolTip(1, QStringLiteral("CAM 工作区：加工规划、仿真、NC 与后处理"));
+    m_workspaceToolBar->addWidget(m_workspaceTabBar);
+    // 工作区切换固定在最上方一行：面板工具栏（CAD / CAM）位于其下，同屏互斥显示。
+    insertToolBar(ui->mainToolBar, m_workspaceToolBar);
+    insertToolBarBreak(ui->mainToolBar);
+
+    connect(m_workspaceTabBar, &QTabBar::currentChanged, this, [this](int index)
+    {
+        setWorkspace(index == 1 ? Workspace::Cam : Workspace::Cad);
+    });
+}
+
+void Gcode_postprocessing_system::setWorkspace(Workspace workspace)
+{
+    m_workspace = workspace;
+    applyWorkspaceState();
+}
+
+// 工作区切换只改变 UI 组织与显示上下文：共享视口、CAD 文档和加工状态都不重建。
+void Gcode_postprocessing_system::applyWorkspaceState()
+{
+    const bool cadActive = m_workspace == Workspace::Cad;
+
+    if (m_workspaceTabBar != nullptr)
+    {
+        const int targetIndex = cadActive ? 0 : 1;
+
+        if (m_workspaceTabBar->currentIndex() != targetIndex)
+        {
+            const QSignalBlocker blocker(m_workspaceTabBar);
+            m_workspaceTabBar->setCurrentIndex(targetIndex);
+        }
+    }
+
+    // 工具栏：CAD 工作区显示几何工具面板，CAM 工作区显示加工面板。
+    ui->mainToolBar->setVisible(cadActive);
+
+    if (m_camToolBar != nullptr)
+    {
+        m_camToolBar->setVisible(!cadActive);
+    }
+
+    // 菜单：CAD 几何编辑入口与 CAM 加工入口分别只在各自工作区出现，文档/视图/设置保持全局。
+    if (ui->menuEdit != nullptr)
+    {
+        ui->menuEdit->menuAction()->setVisible(cadActive);
+    }
+
+    if (m_machiningMenu != nullptr)
+    {
+        m_machiningMenu->menuAction()->setVisible(!cadActive);
+    }
+
+    // 右侧“加工设置”面板属于 CAM 工作区，记录用户在 CAM 中的显示选择。
+    if (m_machiningSettingsDock != nullptr)
+    {
+        // “视图”里的显示开关跟随工作区，避免在 CAD 工作区打开 CAM 面板。
+        m_machiningSettingsDock->toggleViewAction()->setVisible(!cadActive);
+
+        if (cadActive)
+        {
+            m_machiningDockVisibleInCamWorkspace = m_machiningSettingsDock->isVisible();
+            m_machiningSettingsDock->hide();
+        }
+        else
+        {
+            m_machiningSettingsDock->setVisible(m_machiningDockVisibleInCamWorkspace);
+            syncMachiningSettingsState();
+        }
+    }
+
+    // 视口共享：CAM 工作区显示加工可视化，CAD 工作区仅显示几何。
+    if (cadActive)
+    {
+        if (m_camToolPanelWidget != nullptr)
+        {
+            m_camProcessVisualsVisible = m_camToolPanelWidget->processVisualsVisible();
+        }
+
+        ui->openGLWidget->setProcessVisualsVisible(false);
+    }
+    else
+    {
+        ui->openGLWidget->setProcessVisualsVisible(m_camProcessVisualsVisible);
+    }
+
+    ui->openGLWidget->refreshCommandPrompt();
+    syncToolPanelState();
+    statusBar()->showMessage
+    (
+        cadActive
+            ? QStringLiteral("CAD 工作区：创建、修改和整理几何。")
+            : QStringLiteral("CAM 工作区：规划 / 仿真 / NC 与后处理。"),
+        3000
+    );
 }
 
 void Gcode_postprocessing_system::syncToolPanelState()

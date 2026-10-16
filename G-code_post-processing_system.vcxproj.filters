@@ -332,6 +332,12 @@
     <QtMoc Include="include\cad\document\CadDocument.h">
       <Filter>Header Files\cad\document</Filter>
     </QtMoc>
+    <QtMoc Include="include\ui\widgets\CamToolPanelWidget.h">
+      <Filter>Header Files\ui\widgets</Filter>
+    </QtMoc>
+    <ClInclude Include="include\ui\widgets\ToolPanelStyle.h">
+      <Filter>Header Files\ui\widgets</Filter>
+    </ClInclude>
     <QtMoc Include="include\ui\widgets\CadToolPanelWidget.h">
       <Filter>Header Files\ui\widgets</Filter>
     </QtMoc>
@@ -443,6 +449,12 @@
       <Filter>Source Files\infrastructure\config</Filter>
     </ClCompile>
     <ClCompile Include="src\ui\widgets\CadStatusPaneWidget.cpp">
+      <Filter>Source Files\ui\widgets</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ui\widgets\CamToolPanelWidget.cpp">
+      <Filter>Source Files\ui\widgets</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ui\widgets\ToolPanelStyle.cpp">
       <Filter>Source Files\ui\widgets</Filter>
     </ClCompile>
     <ClCompile Include="src\ui\widgets\CadToolPanelWidget.cpp">
