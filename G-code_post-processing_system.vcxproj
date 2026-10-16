@@ -52,15 +52,15 @@
   <ImportGroup Label="Shared" />
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="$(QtMsBuild)\Qt.props" />
+    <Import Project="$(QtMsBuild)\Qt.props" Condition="Exists('$(QtMsBuild)\Qt.props')" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="$(QtMsBuild)\Qt.props" />
+    <Import Project="$(QtMsBuild)\Qt.props" Condition="Exists('$(QtMsBuild)\Qt.props')" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
-    <OpenCVRoot>D:\develop\opencv</OpenCVRoot>
+    <OpenCVRoot Condition="'$(OpenCVRoot)'==''">D:\develop\opencv</OpenCVRoot>
     <OpenCVIncludeDir>$(OpenCVRoot)\build\include</OpenCVIncludeDir>
     <OpenCVLibDir>$(OpenCVRoot)\build\x64\vc16\lib</OpenCVLibDir>
     <OpenCVBinDir>$(OpenCVRoot)\build\x64\vc16\bin</OpenCVBinDir>
