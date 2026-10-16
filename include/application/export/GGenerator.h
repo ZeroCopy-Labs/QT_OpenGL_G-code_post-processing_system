@@ -10,9 +10,13 @@
 
 #include <QString>
 
-class CadDocument;
-class QWidget;
-
+// NC 导出的编排层：组织 NC 生成与后处理调用，并传递诊断。
+//
+// 只负责调用顺序和参数组织：
+// - 几何来自几何快照；
+// - NC 生成由 NcProgramService 完成；
+// - 文本由 GCodePostProcessor 完成；
+// - 文件写入由 GCodeFileWriter 完成，由桌面层负责路径选择与用户交互。
 class GGenerator
 {
 public:
@@ -25,9 +29,6 @@ public:
 public:
     GGenerator();
 
-    void setDocument(CadDocument* document);
-    CadDocument* document() const;
-
     void setProfile(GProfile* profile);
     GProfile* profile() const;
 
@@ -38,7 +39,7 @@ public:
     void setProcessPlan(const cadcam::planning::ProcessPlan* processPlan);
     void setProcessState(const cadcam::process::DocumentProcessState* processState);
 
-    // 几何快照：四轴导出使用它作为几何输入，不再从 CAD 文档重新捕获几何。
+    // 几何快照：NC 生成的几何输入，不再从 CAD 文档重新捕获几何。
     void setGeometrySnapshot(const GeometrySnapshot* snapshot);
     void setCutSurfaceCorrection(double wallThickness, bool positive, bool negative)
     {
@@ -52,20 +53,10 @@ public:
     );
 
     OperationResult<QString> buildProgramText(const OperationContext& context) const;
-    OperationReport writeProgramText
-    (
-        const QString& filePath,
-        const QString& program,
-        const OperationContext& context
-    ) const;
-
-    bool generate(QWidget* parent = nullptr, QString* errorMessage = nullptr) const;
-    bool generateToFile(const QString& filePath, QString* errorMessage = nullptr) const;
 
 private:
     OperationResult<QString> buildRotaryProgramText(const OperationContext& context) const;
 
-    CadDocument* m_document = nullptr;
     GProfile m_defaultProfile;
     GProfile* m_profile = nullptr;
     GenerationMode m_generationMode = GenerationMode::Mode2D;

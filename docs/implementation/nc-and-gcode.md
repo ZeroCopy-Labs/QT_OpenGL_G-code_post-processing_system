@@ -8,16 +8,17 @@ G-code 后处理器依据当前配置将 NC 语义格式化为完整文本。
 
 ## 生产入口
 
-- 桌面层 `exportGCode()` 负责模式检查、计划准备、输出路径选择和结果消息。
-- `prepareDocumentForGCodeExport()` 校验当前计划；缺失或过期时自动执行对应模式的智能排序入口。
-- `GGenerator::buildProgramText()` 根据三轴或四轴模式调用 `NcProgramService`。
+- 桌面层 `exportGCode()` 负责模式检查、输出路径选择、覆盖确认和结果消息。
+- `prepareDocumentForGCodeExport()` 只校验当前 CAM 任务：没有加工计划时提示先完成 CAM Planning，计划或几何快照失效时提示重新 Planning；不自动排序、不建立快照、不修改加工状态。
+- `GGenerator::buildProgramText()` 根据三轴或四轴模式调用 `NcProgramService`，并完成几何快照与配置的参数组织。
 - `GCodePostProcessor::render()` 将完整 `NcProgram` 转换为 CRLF 文本。
-- `GGenerator::writeProgramText()` 将已完成的文本一次写入目标文件。
+- `GCodeFileWriter::write()` 将已完成的文本一次写入目标文件。
 
 ## 输入与输出
 
-三轴输入是当前文档、加工状态、`Planar3Axis ProcessPlan` 和后处理配置。
+三轴输入是几何快照、加工状态、`Planar3Axis ProcessPlan` 和后处理配置。
 四轴输入额外包含由计划和运动配置生成的 `MachineTrajectory`、可选截面及实体元数据。
+两种模式的 NC 输入都来自几何快照：`GeometrySnapshotNcInputBuilder` 由快照条目重建实体元数据与三轴实体输入，不访问 CAD 图元。
 NC 阶段输出 `NcProgram`，保存模式、revision、实体块、运动和诊断注释。
 文本阶段输出完整 `QString`；文件阶段输出 `.nc`、`.gcode` 或文本文件。
 
@@ -30,7 +31,8 @@ NC 阶段输出 `NcProgram`，保存模式、revision、实体块、运动和诊
 - `NcEntityMetadata`：稳定 `EntityId`、顺序、连续组、类型、图层和颜色键。
 - `GProfile`：文件代码、加工单元启停代码、图元类型、图层、颜色和四轴配置。
 - `GCodePostProcessorProfile`：后处理器实际读取的文本规则和值格式。
-- `GGenerator`：连接桌面导出、NC 服务、后处理器和文件写入的应用边界。
+- `GGenerator`：组织 NC 服务与后处理器的调用顺序和参数，只返回文本的应用层编排对象。
+- `GCodeFileWriter`：把已完成的文本写入目标文件的写入器。
 
 ## 当前生产数据流
 
@@ -38,13 +40,14 @@ NC 阶段输出 `NcProgram`，保存模式、revision、实体块、运动和诊
 
 ```text
 Planar3Axis ProcessPlan
-+ CadDocument
++ GeometrySnapshot
 + DocumentProcessState
-→ DocumentPlanarNcInputAdapter
+→ GeometrySnapshotNcInputBuilder
 → PlanarNcProgramBuilder
 → NcProgram
 → GCodePostProcessor
 → G-code 文本
+→ GCodeFileWriter
 → 文件
 ```
 
@@ -52,31 +55,33 @@ Planar3Axis ProcessPlan
 
 ```text
 Rotary4Axis ProcessPlan
-+ CadDocument
++ GeometrySnapshot
 + DocumentProcessState
 + 四轴运动配置
 + 可选 TubeSectionModel
 → MachineTrajectoryService
 → MachineTrajectory
++ GeometrySnapshotNcInputBuilder（实体元数据）
 → NcProgramBuilder
 → NcProgram
 → GCodePostProcessor
 → G-code 文本
+→ GCodeFileWriter
 → 文件
 ```
 
 ## 状态所有权
 
-当前计划、加工状态和几何快照由 `CamJob` 提供，文档、截面和活动配置由主窗口提供；四轴 NC 路径使用几何快照，三轴 NC 路径与兼容层元数据仍使用文档。
+当前计划、加工状态和几何快照由 `CamJob` 提供，截面和活动配置由主窗口提供；三轴与四轴 NC 路径都使用几何快照。
 `NcProgram`、`MachineTrajectory` 和最终文本均为单次导出过程中的临时值对象。
 NC 语义继承计划确定的顺序、方向、起点和连续组，不回写加工上下文。
 输出路径由桌面层和设置存储管理，核心 NC 与后处理器不持有文件对话框。
 
 ## 失效条件
 
-- 计划缺失、模式错误或 revision 与当前文档及加工状态不一致时停止导出。
-- 三轴捕获和 NC 构建前后都复核文档与加工状态 revision。
-- 四轴要求轨迹、元数据、计划、文档和加工状态 revision 一致。
+- 计划缺失、模式错误或 revision 与几何快照及加工状态不一致时停止导出。
+- 三轴要求几何快照、计划与加工状态 revision 一致。
+- 四轴要求轨迹、元数据、计划、几何快照和加工状态 revision 一致。
 - 排序配置变化影响计划及全部下游结果。
 - 旋转轴、安全移动、初始位置、Z 修正、过切和 A 轴配置变化影响四轴轨迹、NC 和文本。
 - 文件头尾、类型、图层、颜色规则和文本精度仅影响后处理文本。
@@ -107,7 +112,9 @@ NC 语义继承计划确定的顺序、方向、起点和连续组，不回写�
 ## 相关源码
 
 - `src/desktop/Gcode_postprocessing_system_GCodeActions.cpp`：组织导出前计划检查、路径选择和用户消息。
-- `src/application/export/GGenerator.cpp`：分派三轴或四轴 NC 构建、文本渲染和文件写入。
+- `src/application/export/GGenerator.cpp`：组织三轴或四轴 NC 构建与文本渲染。
+- `src/application/export/GCodeFileWriter.cpp`：写入并校验已完成的 G-code 文本。
+- `src/application/nc/GeometrySnapshotNcInputBuilder.cpp`：由几何快照与加工计划生成 NC 输入和实体元数据。
 - `src/application/nc/NcProgramService.cpp`：校验 revision 并组织两种模式的 NC 生产链。
 - `src/core/nc/PlanarNcProgramBuilder.cpp`：从三轴计划和几何生成 NC 实体运动。
 - `src/core/nc/NcProgramBuilder.cpp`：将四轴机床轨迹映射为 NC 语义。

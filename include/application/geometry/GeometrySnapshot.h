@@ -17,6 +17,10 @@ struct EntitySnapshotAttributes
     int originalDxfType = 0;
     QString layer;
     QColor color;
+    // 原始颜色事实：true color 优先，其次 ByLayer/ByBlock，最后按 ACI 索引色。
+    // 用于在不访问 CAD 图元的情况下重建 NcEntityMetadata 的颜色键。
+    int trueColor24 = -1;
+    int aciColor = 256;
     bool visible = true;
 };
 

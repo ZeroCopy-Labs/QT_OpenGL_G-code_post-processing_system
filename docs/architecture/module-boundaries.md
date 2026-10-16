@@ -73,7 +73,9 @@ CAM 排序不修改 CAD：`sortEntitiesWithProcessPlan2D()` / `sortEntitiesWithP
 
 `MachineTrajectoryService::buildRotaryTrajectory()` 同样只接收 `GeometrySnapshot`、加工状态和加工计划，不接收 `CadDocument`，也不自行捕获或编译 CAD 几何；轨迹执行继续按图元类型使用轨迹采样策略（从快照条目内的源几何重新采样）。
 
-仍然直接接收 `CadDocument` 的消费者是 `NcProgramService`（三轴 NC 路径与兼容层元数据捕获）、`GGenerator`（文档与配置持有者）与 compatibility 层的旧适配器，它们属于后续导出与兼容阶段。
+NC 与 Post 边界：`NcProgramService` 的三轴与四轴入口都只接收 `GeometrySnapshot`、`DocumentProcessState`、`ProcessPlan` 与加工配置，既不接收 `CadDocument` 也不访问 CAD 图元；三轴实体输入与四轴实体元数据由 `GeometrySnapshotNcInputBuilder` 从快照条目重建。`GGenerator` 只组织 NC 构建与后处理调用并返回文本，不持有文档、不读写文件、不接触对话框或设置；文本写入由 `GCodeFileWriter` 完成，路径选择与用户交互留在桌面层。
+
+`DocumentPlanarNcInputAdapter`、`DocumentNcMetadataAdapter` 与 `LegacyCadItemPathBridge` 保留在 compatibility 层，生产 NC 路径不再调用它们。仍然直接接收 `CadDocument` 的消费者只剩 `GGenerator` 之外的兼容层适配器与 `DocumentGeometrySnapshotBuilder` 本身。
 
 `ProcessPresentationSnapshot` 仍由桌面层持有并交给 Viewer，`RotaryTubeSectionModel` 仍由桌面层持有，本阶段未迁移。
 

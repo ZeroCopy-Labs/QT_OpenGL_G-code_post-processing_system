@@ -1,16 +1,23 @@
 #include "application/nc/NcProgramService.h"
 #include "core/diagnostics/SummaryLog.h"
 
-#include "cad/document/CadDocument.h"
 #include "application/machine/MachineTrajectoryService.h"
-#include "compatibility/legacy/DocumentNcMetadataAdapter.h"
-#include "compatibility/legacy/DocumentPlanarNcInputAdapter.h"
+#include "application/nc/GeometrySnapshotNcInputBuilder.h"
 #include "core/nc/NcProgramBuilder.h"
 #include "core/nc/PlanarNcProgramBuilder.h"
 
+namespace
+{
+    void fillRevisionContext(Diagnostic& diagnostic, const GeometrySnapshot& snapshot)
+    {
+        diagnostic.context.insert(QStringLiteral("contentRevision"),
+            QVariant::fromValue<qulonglong>(snapshot.contentRevision));
+    }
+}
+
 OperationResult<cadcam::nc::NcProgram> NcProgramService::buildPlanarProgram
 (
-    CadDocument& document,
+    const GeometrySnapshot& snapshot,
     const cadcam::process::DocumentProcessState& processState,
     const cadcam::planning::ProcessPlan& processPlan,
     const MachiningProcessConfig& processConfig,
@@ -18,42 +25,35 @@ OperationResult<cadcam::nc::NcProgram> NcProgramService::buildPlanarProgram
 ) const
 {
     OperationResult<cadcam::nc::NcProgram> result;
-    if (processPlan.mode != cadcam::planning::ProcessPlanMode::Planar3Axis)
-    {
-        result.status = OperationStatus::Conflict;
-        Diagnostic diagnostic;
-        diagnostic.code = DiagnosticCode::ProcessPlanModeMismatch;
-        diagnostic.severity = DiagnosticSeverity::Error;
-        diagnostic.component = QStringLiteral("NcProgramService");
-        diagnostic.operation = context.operationName;
-        diagnostic.stage = QStringLiteral("validate-planar-plan-mode");
-        diagnostic.userMessage = QStringLiteral("三轴 NC 只能使用三轴加工计划。");
-        diagnostic.correlationId = context.correlationId;
-        result.addDiagnostic(diagnostic);
-        return result;
-    }
-    auto capture = DocumentPlanarNcInputAdapter::capture(document, processPlan, context);
-    result.mergeDiagnostics(capture);
-    if (!capture.succeeded() || !capture.value.has_value())
-    {
-        result.status = capture.status;
-        return result;
-    }
 
-    if (capture.value->contentRevision != document.contentRevision()
-        || capture.value->contentRevision != processPlan.contentRevision
+    // NC 只校验自己收到的数据：快照、计划与加工状态必须互相对应。
+    if (processPlan.mode != cadcam::planning::ProcessPlanMode::Planar3Axis
+        || snapshot.contentRevision != processPlan.contentRevision
         || processPlan.processStateRevision != processState.revision())
     {
         result.status = OperationStatus::Conflict;
         Diagnostic diagnostic;
-        diagnostic.code = DiagnosticCode::PlanarNcRevisionMismatch;
+        diagnostic.code = processPlan.mode != cadcam::planning::ProcessPlanMode::Planar3Axis
+            ? DiagnosticCode::ProcessPlanModeMismatch
+            : DiagnosticCode::PlanarNcRevisionMismatch;
         diagnostic.severity = DiagnosticSeverity::Error;
         diagnostic.component = QStringLiteral("NcProgramService");
         diagnostic.operation = context.operationName;
         diagnostic.stage = QStringLiteral("validate-planar-revision");
-        diagnostic.userMessage = QStringLiteral("三轴 NC 输入与当前文档版本不一致。");
+        diagnostic.userMessage = processPlan.mode != cadcam::planning::ProcessPlanMode::Planar3Axis
+            ? QStringLiteral("三轴 NC 只能使用三轴加工计划。")
+            : QStringLiteral("几何快照、加工计划或加工状态版本不一致，三轴导出已拒绝。");
         diagnostic.correlationId = context.correlationId;
+        fillRevisionContext(diagnostic, snapshot);
         result.addDiagnostic(diagnostic);
+        return result;
+    }
+
+    auto capture = GeometrySnapshotNcInputBuilder::capturePlanar(snapshot, processPlan, context);
+    result.mergeDiagnostics(capture);
+    if (!capture.succeeded() || !capture.value.has_value())
+    {
+        result.status = capture.status;
         return result;
     }
 
@@ -70,27 +70,12 @@ OperationResult<cadcam::nc::NcProgram> NcProgramService::buildPlanarProgram
             .arg(policy.clearance.retractClearance, 0, 'g', 15)
             .arg(policy.clearance.approachClearance, 0, 'g', 15));
     auto program = cadcam::nc::PlanarNcProgramBuilder::build
-        (capture.value->contentRevision, capture.value->entities, policy, context,
+        (snapshot.contentRevision, *capture.value, policy, context,
             processPlan.processStateRevision);
     result.mergeDiagnostics(program);
     if (!program.succeeded() || !program.value.has_value())
     {
         result.status = program.status;
-        return result;
-    }
-    if (document.contentRevision() != capture.value->contentRevision
-        || processState.revision() != processPlan.processStateRevision)
-    {
-        result.status = OperationStatus::Conflict;
-        Diagnostic diagnostic;
-        diagnostic.code = DiagnosticCode::PlanarNcRevisionMismatch;
-        diagnostic.severity = DiagnosticSeverity::Error;
-        diagnostic.component = QStringLiteral("NcProgramService");
-        diagnostic.operation = context.operationName;
-        diagnostic.stage = QStringLiteral("validate-planar-result");
-        diagnostic.userMessage = QStringLiteral("文档在三轴 NC 程序构建期间已变更。");
-        diagnostic.correlationId = context.correlationId;
-        result.addDiagnostic(diagnostic);
         return result;
     }
 
@@ -104,7 +89,6 @@ OperationResult<cadcam::nc::NcProgram> NcProgramService::buildPlanarProgram
 OperationResult<cadcam::nc::NcProgram> NcProgramService::buildRotaryProgram
 (
     const GeometrySnapshot& snapshot,
-    CadDocument& document,
     const cadcam::process::DocumentProcessState& processState,
     const cadcam::planning::ProcessPlan& processPlan,
     const std::optional<cadcam::machining::TubeSectionModel>& tubeSection,
@@ -134,7 +118,7 @@ OperationResult<cadcam::nc::NcProgram> NcProgramService::buildRotaryProgram
         return result;
     }
 
-    auto metadata = DocumentNcMetadataAdapter::capture(document, processPlan, context);
+    auto metadata = GeometrySnapshotNcInputBuilder::captureRotary(snapshot, processPlan, context);
     result.mergeDiagnostics(metadata);
     if (!metadata.succeeded() || !metadata.value.has_value())
     {
@@ -155,8 +139,7 @@ OperationResult<cadcam::nc::NcProgram> NcProgramService::buildRotaryProgram
         diagnostic.stage = QStringLiteral("validate-revision");
         diagnostic.userMessage = QStringLiteral("轨迹、元数据、加工计划或几何快照版本不一致。");
         diagnostic.correlationId = context.correlationId;
-        diagnostic.context.insert(QStringLiteral("contentRevision"),
-            QVariant::fromValue<qulonglong>(snapshot.contentRevision));
+        fillRevisionContext(diagnostic, snapshot);
         result.addDiagnostic(diagnostic);
         return result;
     }

@@ -56,6 +56,20 @@ GeometrySnapshot
 
 轨迹生成只使用几何快照、加工计划和加工状态：`snapshot.contentRevision`、`plan.contentRevision` 与 `plan.processStateRevision` 必须互相对应，否则返回 `Conflict`，不自动重新规划。
 
+NC 与导出同样只消费 CAM 结果：
+
+```text
+GeometrySnapshot + ProcessPlan + DocumentProcessState + 加工配置
+→ NcProgramService（三轴 PlanarNcProgramBuilder / 四轴 MachineTrajectory + NcProgramBuilder）
+→ NcProgram
+→ GCodePostProcessor
+→ G-code 文本
+→ GCodeFileWriter
+→ 文件
+```
+
+导出不触发规划：没有加工计划时提示先完成 CAM Planning，计划或几何快照失效时提示重新 Planning；导出不排序、不修改 CAD、不重建快照、不修复加工状态。
+
 ## 4. 加工单元形成
 
 ```text

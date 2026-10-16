@@ -1,51 +1,11 @@
 #include "platform/pch.h"
-#include "infrastructure/config/AppSettings.h"
 
 #include "application/export/GGenerator.h"
 #include "application/nc/NcProgramService.h"
 #include "infrastructure/nc/GCodePostProcessor.h"
 
-#include "cad/document/CadDocument.h"
-
-#include <QDir>
-#include <QFile>
-#include <QFileDialog>
-#include <QFileInfo>
-#include <QSettings>
-#include <QStandardPaths>
-#include <QWidget>
-
 namespace
 {
-    QString defaultNcPath()
-    {
-        QString baseDirectory = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-        if (baseDirectory.trimmed().isEmpty()) baseDirectory = QDir::homePath();
-        return QDir(baseDirectory).filePath(QStringLiteral("output.nc"));
-    }
-
-    QString loadLastExportPath()
-    {
-        QSettings settings = makeAppSettings();
-        return settings.value(QStringLiteral("gcode/lastExportPath"), QString()).toString().trimmed();
-    }
-
-    void saveLastExportPath(const QString& filePath)
-    {
-        QSettings settings = makeAppSettings();
-        settings.setValue(QStringLiteral("gcode/lastExportPath"), filePath.trimmed());
-    }
-
-    QString resolveInitialExportPath(QWidget*)
-    {
-        const QString lastExportPath = loadLastExportPath();
-        if (!lastExportPath.isEmpty()
-            && QDir(QFileInfo(lastExportPath).absolutePath()).exists())
-        {
-            return lastExportPath;
-        }
-        return defaultNcPath();
-    }
 
     Diagnostic makeGeneratorDiagnostic
     (
@@ -72,18 +32,7 @@ namespace
         return diagnostic;
     }
 
-    QString legacyErrorMessage(const QVector<Diagnostic>& diagnostics)
-    {
-        for (const Diagnostic& diagnostic : diagnostics)
-        {
-            if (isErrorSeverity(diagnostic.severity))
-            {
-                return diagnostic.userMessage.trimmed().isEmpty()
-                    ? diagnostic.technicalDetail : diagnostic.userMessage;
-            }
-        }
-        return diagnostics.isEmpty() ? QString() : diagnostics.constFirst().userMessage;
-    }
+
 }
 
 GGenerator::GGenerator()
@@ -92,15 +41,6 @@ GGenerator::GGenerator()
 {
 }
 
-void GGenerator::setDocument(CadDocument* document)
-{
-    m_document = document;
-}
-
-CadDocument* GGenerator::document() const
-{
-    return m_document;
-}
 
 void GGenerator::setProfile(GProfile* profile)
 {
@@ -152,32 +92,11 @@ void GGenerator::setTubeSectionModel
     m_tubeSectionModel = tubeSectionModel;
 }
 
-bool GGenerator::generate(QWidget* parent, QString* errorMessage) const
-{
-    const QString filePath = QFileDialog::getSaveFileName
-    (
-        parent,
-        QStringLiteral("导出 G 代码"),
-        resolveInitialExportPath(parent),
-        QStringLiteral("NC 文件 (*.nc);;GCode 文件 (*.gcode);;文本文件 (*.txt)")
-    );
-    if (filePath.isEmpty())
-    {
-        if (errorMessage != nullptr) errorMessage->clear();
-        return false;
-    }
-
-    QString resolvedPath = filePath;
-    if (QFileInfo(resolvedPath).suffix().isEmpty()) resolvedPath.append(QStringLiteral(".nc"));
-    const bool generated = generateToFile(resolvedPath, errorMessage);
-    if (generated) saveLastExportPath(resolvedPath);
-    return generated;
-}
 
 OperationResult<QString> GGenerator::buildRotaryProgramText(const OperationContext& context) const
 {
     OperationResult<QString> result;
-    if (m_document->m_entities.empty())
+    if (m_geometrySnapshot == nullptr || m_geometrySnapshot->entries.empty())
     {
         result.status = OperationStatus::InvalidInput;
         result.addDiagnostic(makeGeneratorDiagnostic
@@ -186,8 +105,8 @@ OperationResult<QString> GGenerator::buildRotaryProgramText(const OperationConte
             DiagnosticCode::InvalidGeometry,
             DiagnosticSeverity::Error,
             QStringLiteral("BuildRotaryProgramText"),
-            QStringLiteral("ValidateDocument"),
-            QStringLiteral("文档中没有可生成 G 代码的图元。")
+            QStringLiteral("ValidateGeometrySnapshot"),
+            QStringLiteral("几何快照中没有可生成 G 代码的图元。")
         ));
         return result;
     }
@@ -229,7 +148,6 @@ OperationResult<QString> GGenerator::buildRotaryProgramText(const OperationConte
     auto program = service.buildRotaryProgram
     (
         *m_geometrySnapshot,
-        *m_document,
         *m_processState,
         *m_processPlan,
         m_tubeSectionModel,
@@ -262,18 +180,19 @@ OperationResult<QString> GGenerator::buildRotaryProgramText(const OperationConte
 OperationResult<QString> GGenerator::buildProgramText(const OperationContext& context) const
 {
     OperationResult<QString> result;
-    if (m_document == nullptr || m_profile == nullptr)
+    if (m_geometrySnapshot == nullptr || m_profile == nullptr)
     {
         result.status = OperationStatus::InvalidInput;
         result.addDiagnostic(makeGeneratorDiagnostic
         (
             context,
-            m_document == nullptr ? DiagnosticCode::MissingDocument : DiagnosticCode::MissingProfile,
+            m_geometrySnapshot == nullptr
+                ? DiagnosticCode::NcProgramInputInvalid : DiagnosticCode::MissingProfile,
             DiagnosticSeverity::Error,
             QStringLiteral("BuildProgramText"),
             QStringLiteral("ValidateInput"),
-            m_document == nullptr
-                ? QStringLiteral("未设置文档，无法生成 G 代码。")
+            m_geometrySnapshot == nullptr
+                ? QStringLiteral("未设置几何快照，无法生成 G 代码。")
                 : QStringLiteral("未设置 G 代码配置，无法生成 G 代码。")
         ));
         return result;
@@ -297,7 +216,7 @@ OperationResult<QString> GGenerator::buildProgramText(const OperationContext& co
         MachiningProcessConfig::fromProfile(*m_profile);
     NcProgramService service;
     auto program = service.buildPlanarProgram
-        (*m_document, *m_processState, *m_processPlan,
+        (*m_geometrySnapshot, *m_processState, *m_processPlan,
             processConfig, context);
     result.mergeDiagnostics(program);
     if (!program.succeeded() || !program.value.has_value())
@@ -318,102 +237,4 @@ OperationResult<QString> GGenerator::buildProgramText(const OperationContext& co
         ? OperationStatus::PartialSuccess : rendered.status;
     result.value = std::move(rendered.value);
     return result;
-}
-
-OperationReport GGenerator::writeProgramText
-(
-    const QString& filePath,
-    const QString& program,
-    const OperationContext& context
-) const
-{
-    OperationReport report;
-    if (filePath.trimmed().isEmpty())
-    {
-        report.status = OperationStatus::InvalidInput;
-        report.addDiagnostic(makeGeneratorDiagnostic
-        (
-            context, DiagnosticCode::InvalidArgument, DiagnosticSeverity::Error,
-            QStringLiteral("WriteProgramText"), QStringLiteral("ValidateInput"),
-            QStringLiteral("G 代码输出路径为空。"), QStringLiteral("filePath is empty")
-        ));
-        return report;
-    }
-    if (program.isEmpty())
-    {
-        report.status = OperationStatus::InvalidInput;
-        report.addDiagnostic(makeGeneratorDiagnostic
-        (
-            context, DiagnosticCode::OutputVerificationFailure, DiagnosticSeverity::Error,
-            QStringLiteral("WriteProgramText"), QStringLiteral("ValidateInput"),
-            QStringLiteral("不能写入空的 G 代码程序。"), QStringLiteral("program is empty"),
-            { { QStringLiteral("filePath"), filePath } }
-        ));
-        return report;
-    }
-
-    QFile file(filePath);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
-    {
-        const QString nativePath = QDir::toNativeSeparators(filePath);
-        report.status = OperationStatus::Failed;
-        report.addDiagnostic(makeGeneratorDiagnostic
-        (
-            context, DiagnosticCode::FileOpenFailure, DiagnosticSeverity::Error,
-            QStringLiteral("WriteProgramText"), QStringLiteral("OpenOutputFile"),
-            QStringLiteral("无法打开 G 代码输出文件：%1\n原因：%2\n常见原因：安全软件（如 360 文档保护）拦截未签名程序写入桌面/文档目录、文件为只读或被其他程序占用、目标目录不存在。\n可改用其他目录（例如 D 盘下的工作目录），或把本程序加入安全软件信任列表后重试。")
-                .arg(nativePath, file.errorString()),
-            file.errorString(),
-            { { QStringLiteral("filePath"), filePath } }
-        ));
-        return report;
-    }
-
-    const QByteArray encodedProgram = program.toUtf8();
-    const qint64 writtenLength = file.write(encodedProgram);
-    file.close();
-    if (writtenLength != encodedProgram.size())
-    {
-        report.status = OperationStatus::Failed;
-        report.addDiagnostic(makeGeneratorDiagnostic
-        (
-            context, DiagnosticCode::FileWriteFailure, DiagnosticSeverity::Error,
-            QStringLiteral("WriteProgramText"), QStringLiteral("WriteOutputFile"),
-            QStringLiteral("G 代码文件写入不完整：%1\n已写入 %2/%3 字节，请检查磁盘空间与目标目录权限后重试。")
-                .arg(QDir::toNativeSeparators(filePath))
-                .arg(writtenLength)
-                .arg(encodedProgram.size()),
-            QStringLiteral("QFile::write returned an unexpected byte count"),
-            {
-                { QStringLiteral("filePath"), filePath },
-                { QStringLiteral("expectedCount"), encodedProgram.size() },
-                { QStringLiteral("actualCount"), writtenLength }
-            }
-        ));
-        return report;
-    }
-
-    report.status = OperationStatus::Success;
-    report.value = std::monostate{};
-    return report;
-}
-
-bool GGenerator::generateToFile(const QString& filePath, QString* errorMessage) const
-{
-    const OperationContext context = createOperationContext(QStringLiteral("generate-gcode"));
-    const OperationResult<QString> buildResult = buildProgramText(context);
-    if (!buildResult.succeeded() || !buildResult.value.has_value())
-    {
-        if (errorMessage != nullptr) *errorMessage = legacyErrorMessage(buildResult.diagnostics);
-        return false;
-    }
-
-    const OperationReport writeResult = writeProgramText(filePath, *buildResult.value, context);
-    if (!writeResult.succeeded())
-    {
-        if (errorMessage != nullptr) *errorMessage = legacyErrorMessage(writeResult.diagnostics);
-        return false;
-    }
-    if (errorMessage != nullptr) errorMessage->clear();
-    return true;
 }

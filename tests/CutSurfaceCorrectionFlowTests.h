@@ -81,7 +81,7 @@ inline void boundaryMinimumXOrderTests()
                 throw std::runtime_error("boundary minimum-X order or stable tie failed");
         }
         GGenerator generator;
-        generator.setDocument(&document);
+        generator.setGeometrySnapshot(&*snapshot.value);
         generator.setGenerationMode(GGenerator::GenerationMode::Mode3D);
         generator.setProcessState(&state);
         generator.setProcessPlan(&*result.value);
@@ -192,7 +192,6 @@ inline void cutSurfaceCorrectionFlowTests()
         throw std::runtime_error("geometry snapshot build failed");
     }
     GGenerator generator;
-    generator.setDocument(&document);
     generator.setProfile(&profile);
     generator.setGenerationMode(GGenerator::GenerationMode::Mode3D);
     generator.setProcessState(&state);

@@ -3,6 +3,8 @@
 
 #include "desktop/Gcode_postprocessing_system.h"
 
+#include "application/export/GCodeFileWriter.h"
+
 #include "cad/items/CadItem.h"
 #include "cad/view/rendering/CadProcessVisualUtils.h"
 #include "application/messaging/DebugMessageSink.h"
@@ -364,23 +366,6 @@ namespace
         }
     }
 
-    bool isExportSortableEntityType(DRW::ETYPE type)
-    {
-        switch (type)
-        {
-        case DRW::ETYPE::LINE:
-        case DRW::ETYPE::ARC:
-        case DRW::ETYPE::CIRCLE:
-        case DRW::ETYPE::ELLIPSE:
-        case DRW::ETYPE::POLYLINE:
-        case DRW::ETYPE::LWPOLYLINE:
-        case DRW::ETYPE::SPLINE:
-            return true;
-        default:
-            return false;
-        }
-    }
-
 }
 
 bool Gcode_postprocessing_system::exportGCode()
@@ -456,10 +441,55 @@ OperationReport Gcode_postprocessing_system::prepareDocumentForGCodeExport
         generationMode == GGenerator::GenerationMode::Mode3D
         ? cadcam::planning::ProcessPlanMode::Rotary4Axis
         : cadcam::planning::ProcessPlanMode::Planar3Axis;
-    const bool hasCurrentProcessPlan = m_camJob.isProcessPlanCurrent(m_document.contentRevision())
-        && m_camJob.processPlan()->mode == requiredPlanMode;
-    const int excludedCount = hasCurrentProcessPlan
-        ? static_cast<int>(m_camJob.processPlan()->exclusions.size()) : 0;
+    // 导出是消费结果的阶段：只验证当前 CAM 任务是否有效，不自动排序、不建立快照、不修复状态。
+    if (!m_camJob.hasProcessPlan())
+    {
+        report.status = OperationStatus::Conflict;
+        report.addDiagnostic(makeExportDiagnostic
+        (
+            context,
+            DiagnosticCode::MissingProcessOrder,
+            DiagnosticSeverity::Error,
+            QStringLiteral("PrepareDocumentForGCodeExport"),
+            QStringLiteral("RequireProcessPlan"),
+            QStringLiteral("当前没有有效的加工计划，请先完成 CAM Planning。")
+        ));
+        return report;
+    }
+
+    if (!m_camJob.isProcessPlanCurrent(m_document.contentRevision()))
+    {
+        report.status = OperationStatus::Conflict;
+        report.addDiagnostic(makeExportDiagnostic
+        (
+            context,
+            DiagnosticCode::ProcessStateRevisionMismatch,
+            DiagnosticSeverity::Error,
+            QStringLiteral("PrepareDocumentForGCodeExport"),
+            QStringLiteral("RequireCurrentProcessPlan"),
+            QStringLiteral("当前加工计划已失效，请重新执行 Planning。")
+        ));
+        return report;
+    }
+
+    if (m_camJob.processPlan()->mode != requiredPlanMode
+        || !m_camJob.hasGeometrySnapshot()
+        || !m_camJob.isGeometrySnapshotCurrent(m_document.contentRevision()))
+    {
+        report.status = OperationStatus::Conflict;
+        report.addDiagnostic(makeExportDiagnostic
+        (
+            context,
+            DiagnosticCode::PlanarNcRevisionMismatch,
+            DiagnosticSeverity::Error,
+            QStringLiteral("PrepareDocumentForGCodeExport"),
+            QStringLiteral("RequireGeometrySnapshot"),
+            QStringLiteral("当前几何快照与加工计划不匹配，请重新执行 Planning。")
+        ));
+        return report;
+    }
+
+    const int excludedCount = static_cast<int>(m_camJob.processPlan()->exclusions.size());
 
     if (excludedCount > 0)
     {
@@ -470,27 +500,13 @@ OperationReport Gcode_postprocessing_system::prepareDocumentForGCodeExport
             DiagnosticSeverity::Notice,
             QStringLiteral("PrepareDocumentForGCodeExport"),
             QStringLiteral("ApplyExclusions"),
-            QStringLiteral("废面规则已排除 %1 个图元，G代码不会包含这些图元。").arg(excludedCount),
+            QStringLiteral("加工计划已排除 %1 个图元（废弃面、重复几何等），G代码不会包含这些图元。").arg(excludedCount),
             QString(),
             { { QStringLiteral("excludedCount"), excludedCount } }
         ));
     }
 
-    const bool hasProcessableEntity = hasCurrentProcessPlan
-        ? !m_camJob.processPlan()->assignments.empty()
-        : std::any_of
-        (
-            m_document.m_entities.begin(),
-            m_document.m_entities.end(),
-            [](const std::unique_ptr<CadItem>& entity)
-            {
-                return entity != nullptr
-                    && entity->m_nativeEntity != nullptr
-                    && isExportSortableEntityType(entity->m_type);
-            }
-        );
-
-    if (!hasProcessableEntity)
+    if (m_camJob.processPlan()->assignments.empty())
     {
         report.status = OperationStatus::InvalidInput;
         report.addDiagnostic(makeExportDiagnostic
@@ -499,44 +515,11 @@ OperationReport Gcode_postprocessing_system::prepareDocumentForGCodeExport
             DiagnosticCode::InvalidGeometry,
             DiagnosticSeverity::Error,
             QStringLiteral("PrepareDocumentForGCodeExport"),
-            QStringLiteral("ValidateDocument"),
-            QStringLiteral("废面区间过滤后没有可加工图元。"),
-            QStringLiteral("No export-sortable entity remains after exclusions")
+            QStringLiteral("ValidateProcessPlan"),
+            QStringLiteral("当前加工计划没有可加工的图元，请重新执行 Planning。"),
+            QStringLiteral("Process plan contains no assignment")
         ));
         return report;
-    }
-
-    const bool requiresCurrentProcessPlan = !hasCurrentProcessPlan;
-    if (requiresCurrentProcessPlan)
-    {
-        report.addDiagnostic(makeExportDiagnostic
-        (
-            context,
-            DiagnosticCode::MissingProcessOrder,
-            DiagnosticSeverity::Notice,
-            QStringLiteral("PrepareDocumentForGCodeExport"),
-            QStringLiteral("EnsureProcessOrder"),
-            QStringLiteral("检测到当前图元尚未完成排序，导出前自动执行智能排序。")
-        ));
-
-        const bool sorted = sortEntitiesByCurrentMode
-            (cadcam::planning::ProcessSortIntent::RebuildSequence);
-
-        if (!sorted)
-        {
-            report.status = OperationStatus::Failed;
-            report.addDiagnostic(makeExportDiagnostic
-            (
-                context,
-                DiagnosticCode::MissingProcessOrder,
-                DiagnosticSeverity::Error,
-                QStringLiteral("PrepareDocumentForGCodeExport"),
-                QStringLiteral("EnsureProcessOrder"),
-                QStringLiteral("自动智能排序失败，G代码导出已取消。"),
-                QStringLiteral("The existing smart sort operation returned false")
-            ));
-            return report;
-        }
     }
 
     report.status = OperationStatus::Success;
@@ -585,19 +568,11 @@ bool Gcode_postprocessing_system::exportGCode
         return false;
     }
 
-    // 四轴导出使用当前 CAM 任务的几何快照；快照过期时按需重建。
-    if (generationMode == GGenerator::GenerationMode::Mode3D
-        && !ensureCurrentGeometrySnapshot(context))
-    {
-        return false;
-    }
-
+    // 导出只消费当前 CAM 任务的结果：几何快照与加工计划在准备阶段已验证有效。
     GGenerator generator;
-    generator.setDocument(&m_document);
     generator.setProfile(&m_activeProfile);
     generator.setGenerationMode(generationMode);
-    if (generationMode == GGenerator::GenerationMode::Mode3D
-        && m_camJob.hasGeometrySnapshot())
+    if (m_camJob.hasGeometrySnapshot())
     {
         generator.setGeometrySnapshot(&*m_camJob.geometrySnapshot());
     }
@@ -710,7 +685,7 @@ bool Gcode_postprocessing_system::exportGCode
         return false;
     }
 
-    OperationReport writeResult = generator.writeProgramText
+    OperationReport writeResult = GCodeFileWriter::write
     (
         resolvedExportPath,
         *buildResult.value,
@@ -747,7 +722,7 @@ bool Gcode_postprocessing_system::exportGCode
                     alternativePath.append(QStringLiteral(".nc"));
                 }
 
-                OperationReport retryResult = generator.writeProgramText
+                OperationReport retryResult = GCodeFileWriter::write
                 (
                     alternativePath,
                     *buildResult.value,

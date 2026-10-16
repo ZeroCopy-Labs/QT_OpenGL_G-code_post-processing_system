@@ -429,6 +429,14 @@ if exist "$(VCRuntimeRedistDir)\*.dll" copy /Y "$(VCRuntimeRedistDir)\*.dll" "$(
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>platform/pch.h</PrecompiledHeaderFile>
     </ClCompile>
+    <ClCompile Include="src\application\export\GCodeFileWriter.cpp">
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>platform/pch.h</PrecompiledHeaderFile>
+    </ClCompile>
+    <ClCompile Include="src\application\nc\GeometrySnapshotNcInputBuilder.cpp">
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>platform/pch.h</PrecompiledHeaderFile>
+    </ClCompile>
     <ClCompile Include="src\application\geometry\GeometrySamplingPolicy.cpp">
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>platform/pch.h</PrecompiledHeaderFile>
@@ -689,6 +697,8 @@ if exist "$(VCRuntimeRedistDir)\*.dll" copy /Y "$(VCRuntimeRedistDir)\*.dll" "$(
     <ClInclude Include="include\application\geometry\DocumentGeometrySnapshotBuilder.h" />
     <ClInclude Include="include\application\geometry\GeometryCanonicalPathKey.h" />
     <ClInclude Include="include\application\geometry\GeometryDuplicateAnalyzer.h" />
+    <ClInclude Include="include\application\export\GCodeFileWriter.h" />
+    <ClInclude Include="include\application\nc\GeometrySnapshotNcInputBuilder.h" />
     <ClInclude Include="include\application\geometry\GeometrySamplingPolicy.h" />
     <ClInclude Include="include\application\geometry\GeometrySnapshotCompiler.h" />
     <ClInclude Include="include\application\tasks\TaskContext.h" />

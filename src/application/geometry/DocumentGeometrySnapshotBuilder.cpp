@@ -121,6 +121,8 @@ OperationResult<GeometrySourceSnapshot> DocumentGeometrySnapshotBuilder::capture
         entry.attributes.originalDxfType = static_cast<int>(item->m_type);
         entry.attributes.layer = QString::fromUtf8(item->m_nativeEntity->layer.c_str());
         entry.attributes.color = item->m_color;
+        entry.attributes.trueColor24 = item->m_nativeEntity->color24;
+        entry.attributes.aciColor = item->m_nativeEntity->color;
         entry.attributes.visible = item->m_nativeEntity->visible;
         entry.sourceKind = sourceKindForType(item->m_type);
 

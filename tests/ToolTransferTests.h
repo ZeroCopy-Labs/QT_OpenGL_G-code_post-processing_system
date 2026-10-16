@@ -207,7 +207,7 @@ inline void toolTransferTests()
         transfer.coordinatedTransferEnabled = linked;
         stored.setToolTransferConfig(transfer);
         GGenerator generator;
-        generator.setDocument(&document);
+        generator.setGeometrySnapshot(&*snapshot.value);
         generator.setProfile(&stored);
         generator.setProcessState(&state);
         generator.setProcessPlan(&*plan.value);

@@ -1118,6 +1118,12 @@
     <ClCompile Include="src\application\geometry\GeometryDuplicateAnalyzer.cpp">
       <Filter>Source Files\application\geometry</Filter>
     </ClCompile>
+    <ClCompile Include="src\application\export\GCodeFileWriter.cpp">
+      <Filter>Source Files\application\export</Filter>
+    </ClCompile>
+    <ClCompile Include="src\application\nc\GeometrySnapshotNcInputBuilder.cpp">
+      <Filter>Source Files\application\nc</Filter>
+    </ClCompile>
     <ClCompile Include="src\application\geometry\GeometrySamplingPolicy.cpp">
       <Filter>Source Files\application\geometry</Filter>
     </ClCompile>
@@ -1231,6 +1237,12 @@
     </ClInclude>
     <ClInclude Include="include\application\geometry\GeometryDuplicateAnalyzer.h">
       <Filter>Header Files\application\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="include\application\export\GCodeFileWriter.h">
+      <Filter>Header Files\application\export</Filter>
+    </ClInclude>
+    <ClInclude Include="include\application\nc\GeometrySnapshotNcInputBuilder.h">
+      <Filter>Header Files\application\nc</Filter>
     </ClInclude>
     <ClInclude Include="include\application\geometry\GeometrySamplingPolicy.h">
       <Filter>Header Files\application\geometry</Filter>
