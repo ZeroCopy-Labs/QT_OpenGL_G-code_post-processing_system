@@ -97,6 +97,8 @@ CAD 与外部格式数据应在进入 Core 前完成捕获和适配。Core 计�
 
 CAM 生命周期规则集中在 `application/cam/CamLifecycle.h`：它只定义失效范围（`CamDerivedScope`）与由当前数据计算的 `CamReadiness` 就绪投影，不持有 UI、视图或编辑器，也不保存任何派生结果。真正的失效动作由桌面层 `invalidateCamDerivedResults(scope)` 执行，分别作用于 `CamJob`、`CamRenderLayer` 与仿真会话。
 
+CAM 数据一致性验证集中在 `application/cam/CamValidation.h`：它对已经存在的 `CamJob`、几何快照、加工状态、加工计划、机床轨迹与 NC 程序做只读检查，失败只返回诊断，不修改任何业务状态、不重新生成、不自动修复。计划的发布边界（排序与加工单元编辑）先验证再写入 `CamJob`；四轴轨迹与三轴/四轴 NC 在各自服务返回前验证结果。验证结果不保存到 `CamJob`，也不进入 `CamReadiness`。
+
 共享视口内并列第四个层 `SimulationRenderLayer`'@ },
   @{ f = 'docs\architecture\data-flow.md'
      old = '仿真是归一化回放：不模拟真实机床时间，不重新规划，不修改 CAD 与加工状态，也不解析 G-code。计划失效时当前仿真会话被清除。'

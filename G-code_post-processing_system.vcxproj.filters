@@ -640,6 +640,9 @@
     <ClCompile Include="src\application\cam\CamLifecycle.cpp">
       <Filter>Source Files\application\cam</Filter>
     </ClCompile>
+    <ClCompile Include="src\application\cam\CamValidation.cpp">
+      <Filter>Source Files\application\cam</Filter>
+    </ClCompile>
     <ClCompile Include="src\application\cam\CamJob.cpp">
       <Filter>Source Files\application\cam</Filter>
     </ClCompile>
@@ -881,6 +884,9 @@
     </ClInclude>
     <ClInclude Include="include\cad\view\rendering\CadSelectionHandle.h">
       <Filter>Header Files\cad\view\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="include\application\cam\CamValidation.h">
+      <Filter>Header Files\application\cam</Filter>
     </ClInclude>
     <ClInclude Include="include\application\cam\CamLifecycle.h">
       <Filter>Header Files\application\cam</Filter>

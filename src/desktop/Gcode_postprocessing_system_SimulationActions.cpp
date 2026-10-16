@@ -7,6 +7,7 @@
 
 #include "desktop/Gcode_postprocessing_system.h"
 
+#include "application/cam/CamValidation.h"
 #include "application/machine/MachineTrajectoryService.h"
 #include "application/nc/NcProgramService.h"
 #include "application/simulation/SimulationTrajectoryAdapter.h"
@@ -63,6 +64,23 @@ bool Gcode_postprocessing_system::prepareSimulation()
     {
         QMessageBox::warning(this, QStringLiteral("仿真"),
             QStringLiteral("当前几何快照已失效，请重新执行 Planning。"));
+        return false;
+    }
+
+    // 数据一致性验证：只读检查，不修复任何状态。运动结果本身由生成服务在返回前验证。
+    const OperationReport planValidation = cadcam::cam::CamValidation::validateProcessPlan
+    (
+        *m_camJob.geometrySnapshot(),
+        m_camJob.processState(),
+        *m_camJob.processPlan(),
+        context
+    );
+    if (!planValidation.succeeded())
+    {
+        const QString message = planValidation.diagnostics.isEmpty()
+            ? QStringLiteral("当前加工计划未通过一致性验证，请重新执行 Planning。")
+            : planValidation.diagnostics.constLast().userMessage;
+        QMessageBox::warning(this, QStringLiteral("仿真"), message);
         return false;
     }
 

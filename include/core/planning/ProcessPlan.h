@@ -11,6 +11,8 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <limits>
+#include <map>
 #include <optional>
 #include <set>
 #include <vector>
@@ -416,6 +418,43 @@ namespace cadcam::planning
             {
                 return false;
             }
+        }
+        return true;
+    }
+
+    // 加工组前置约束是否满足：每条前置关系引用的加工组必须存在，且前驱组全部成员都排在后继组之前。
+    // 纯验证函数，只读，供规划过程与 CAM 一致性验证共用。
+    inline bool satisfiesPrecedenceConstraints(const ProcessPlan& plan)
+    {
+        std::map<geometry::EntityId, int> orderByEntity;
+        for (const ProcessAssignment& assignment : plan.assignments)
+            orderByEntity.emplace(assignment.entityId, assignment.processOrder);
+
+        std::map<int, const ProcessGroup*> groupsById;
+        for (const ProcessGroup& group : plan.groups)
+            groupsById.emplace(group.groupId, &group);
+
+        for (const ProcessPrecedence& precedence : plan.precedenceConstraints)
+        {
+            const auto predecessor = groupsById.find(precedence.predecessorGroupId);
+            const auto successor = groupsById.find(precedence.successorGroupId);
+            if (predecessor == groupsById.end() || successor == groupsById.end()) return false;
+
+            int predecessorLast = -1;
+            int successorFirst = std::numeric_limits<int>::max();
+            for (const geometry::EntityId entityId : predecessor->second->entityIds)
+            {
+                const auto found = orderByEntity.find(entityId);
+                if (found == orderByEntity.end()) return false;
+                predecessorLast = std::max(predecessorLast, found->second);
+            }
+            for (const geometry::EntityId entityId : successor->second->entityIds)
+            {
+                const auto found = orderByEntity.find(entityId);
+                if (found == orderByEntity.end()) return false;
+                successorFirst = std::min(successorFirst, found->second);
+            }
+            if (predecessorLast >= successorFirst) return false;
         }
         return true;
     }

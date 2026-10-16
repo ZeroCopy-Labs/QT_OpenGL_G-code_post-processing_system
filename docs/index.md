@@ -35,3 +35,4 @@
 - [四轴机床轨迹](./implementation/rotary-trajectory.md)
 - [NC 与 G-code](./implementation/nc-and-gcode.md)
 - [CAM 仿真](./implementation/simulation.md)
+- [CAM 数据一致性验证](./implementation/cam-validation.md)

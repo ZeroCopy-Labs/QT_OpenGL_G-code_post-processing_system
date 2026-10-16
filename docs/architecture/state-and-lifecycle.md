@@ -126,7 +126,18 @@ CadDocument（contentRevision）
 
 加工计划的失效入口仍是 `CamJob::invalidateProcessPlan()`（由 `PlanningDerived` 复用）；`CamJob::isProcessPlanCurrent(documentContentRevision)` 判断当前计划是否仍匹配文档内容 revision 和加工状态 revision。计划整体替换，不做原位修改。撤销和重做同样按“状态发生实际变化即推进 revision”的规则处理，revision 不倒退。
 
-### 5.4 为什么不把派生结果放进 CamJob
+### 5.4 只读一致性验证
+
+失效规则回答“什么时候结果不再有效”，验证回答“当前结果彼此是否自洽”。两者都不保存为独立状态：
+
+- `CamValidation::validateCamJob()`：复用 `CamJob` 的有效性判定检查快照与计划是否存在且与当前 revision 对应；
+- `CamValidation::validateProcessPlan()`：检查计划与快照、加工状态的 revision，计划引用的图元是否仍存在，以及计划结构（复用 Core 共享的 `validateProcessUnitStructure()` 与 `satisfiesPrecedenceConstraints()`）；
+- `CamValidation::validateMachineTrajectory()`：检查轨迹 revision、图元映射、加工单元顺序、来源序号与坐标有限性；
+- `CamValidation::validateNcProgram()`：检查 NC revision、模式、实体块映射、运动轴参数与加工单元启停合法性。
+
+计划只有在验证通过后才会写入 `CamJob`；机床轨迹与 NC 在生成服务返回前验证，失败即丢弃结果。
+
+### 5.5 为什么不把派生结果放进 CamJob
 
 `MachineTrajectory`、`NcProgram`、`SimulationTrajectory` 与仿真会话都按需重新生成，当前不长期缓存：导出与仿真在需要时按有效计划重新计算。因此 `CamJob` 仍然只拥有几何快照、加工状态、加工设置和加工计划；生命周期通过 revision 与失效范围表达，而不是通过增加缓存成员表达。
 

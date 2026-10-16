@@ -249,6 +249,14 @@ private:
     void invalidateCurrentProcessPlan();
     // 机床运动配置变化的失效入口：按四轴规划输入是否变化决定失效范围。
     void applyMachineConfigurationChange(const GProfile& previousProfile);
+
+    // 加工计划发布边界：验证通过才写入 CamJob。
+    // 验证失败返回 false，并通过 failureMessage 给出原因；不修改任何业务状态，也不自动修复。
+    bool publishValidatedProcessPlan
+    (
+        cadcam::planning::ProcessPlan plan,
+        QString* failureMessage
+    );
     // 确保 CamJob 持有与当前文档 revision 一致的几何快照；
     // 仅当快照缺失或过期时捕获并编译，不建立全局快照管理器。
     bool ensureCurrentGeometrySnapshot(const OperationContext& context);

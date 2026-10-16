@@ -514,6 +514,10 @@ if exist "$(VCRuntimeRedistDir)\*.dll" copy /Y "$(VCRuntimeRedistDir)\*.dll" "$(
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>platform/pch.h</PrecompiledHeaderFile>
     </ClCompile>
+    <ClCompile Include="src\application\cam\CamValidation.cpp">
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>platform/pch.h</PrecompiledHeaderFile>
+    </ClCompile>
     <ClCompile Include="src\application\cam\CamJob.cpp">
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>platform/pch.h</PrecompiledHeaderFile>
@@ -775,6 +779,7 @@ if exist "$(VCRuntimeRedistDir)\*.dll" copy /Y "$(VCRuntimeRedistDir)\*.dll" "$(
     <ClInclude Include="include\application\planning\ProcessPlanningService.h" />
     <ClInclude Include="include\application\cam\CamJob.h" />
     <ClInclude Include="include\application\cam\CamLifecycle.h" />
+    <ClInclude Include="include\application\cam\CamValidation.h" />
     <ClInclude Include="include\application\process\ProcessStateEditSync.h" />
     <ClInclude Include="include\application\process\DocumentProcessState.h" />
     <ClInclude Include="include\application\process\ProcessPresentationSnapshot.h" />

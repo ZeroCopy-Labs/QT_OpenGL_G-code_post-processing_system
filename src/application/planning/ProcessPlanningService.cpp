@@ -83,40 +83,6 @@ namespace
         plan.endCutSides = cadcam::planning::resolveEndCutSides(std::move(boundaries));
     }
 
-    bool satisfiesPrecedenceConstraints(const ProcessPlan& plan)
-    {
-        std::map<EntityId, int> orderByEntity;
-        for (const ProcessAssignment& assignment : plan.assignments)
-            orderByEntity.emplace(assignment.entityId, assignment.processOrder);
-
-        std::map<int, const ProcessGroup*> groupsById;
-        for (const ProcessGroup& group : plan.groups)
-            groupsById.emplace(group.groupId, &group);
-
-        for (const auto& precedence : plan.precedenceConstraints)
-        {
-            const auto predecessor = groupsById.find(precedence.predecessorGroupId);
-            const auto successor = groupsById.find(precedence.successorGroupId);
-            if (predecessor == groupsById.end() || successor == groupsById.end()) return false;
-
-            int predecessorLast = -1;
-            int successorFirst = std::numeric_limits<int>::max();
-            for (const EntityId entityId : predecessor->second->entityIds)
-            {
-                const auto found = orderByEntity.find(entityId);
-                if (found == orderByEntity.end()) return false;
-                predecessorLast = std::max(predecessorLast, found->second);
-            }
-            for (const EntityId entityId : successor->second->entityIds)
-            {
-                const auto found = orderByEntity.find(entityId);
-                if (found == orderByEntity.end()) return false;
-                successorFirst = std::min(successorFirst, found->second);
-            }
-            if (predecessorLast >= successorFirst) return false;
-        }
-        return true;
-    }
 
     bool rebuildProcessUnitExecution(ProcessPlan& plan)
     {
@@ -155,7 +121,7 @@ namespace
             fragment.processUnitIndex = unitIndex->second;
         }
         return cadcam::planning::validateProcessUnitStructure(plan)
-            && satisfiesPrecedenceConstraints(plan);
+            && cadcam::planning::satisfiesPrecedenceConstraints(plan);
     }
 
     bool reorderProcessUnits

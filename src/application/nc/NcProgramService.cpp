@@ -2,6 +2,7 @@
 #include "core/diagnostics/SummaryLog.h"
 
 #include "application/machine/MachineTrajectoryService.h"
+#include "application/cam/CamValidation.h"
 #include "application/nc/GeometrySnapshotNcInputBuilder.h"
 #include "core/nc/NcProgramBuilder.h"
 #include "core/nc/PlanarNcProgramBuilder.h"
@@ -79,6 +80,23 @@ OperationResult<cadcam::nc::NcProgram> NcProgramService::buildPlanarProgram
         return result;
     }
 
+    // 结果一致性检查：NC 程序必须仍然与输入计划、几何快照与加工状态对应。
+    const auto validation = cadcam::cam::CamValidation::validateNcProgram
+    (
+        snapshot,
+        processState,
+        processPlan,
+        std::nullopt,
+        *program.value,
+        context
+    );
+    result.mergeDiagnostics(validation);
+    if (!validation.succeeded())
+    {
+        result.status = validation.status;
+        return result;
+    }
+
     result.status = capture.status == OperationStatus::PartialSuccess
         || program.status == OperationStatus::PartialSuccess
         ? OperationStatus::PartialSuccess : OperationStatus::Success;
@@ -147,7 +165,30 @@ OperationResult<cadcam::nc::NcProgram> NcProgramService::buildRotaryProgram
     auto program = cadcam::nc::NcProgramBuilder::buildRotary
         (*trajectory.value, *metadata.value, context, tubeSection);
     result.mergeDiagnostics(program);
+    if (!program.succeeded() || !program.value.has_value())
+    {
+        result.status = program.status;
+        return result;
+    }
+
+    // 结果一致性检查：四轴 NC 同时与加工计划和生成它的机床轨迹对照。
+    const auto validation = cadcam::cam::CamValidation::validateNcProgram
+    (
+        snapshot,
+        processState,
+        processPlan,
+        trajectory.value,
+        *program.value,
+        context
+    );
+    result.mergeDiagnostics(validation);
+    if (!validation.succeeded())
+    {
+        result.status = validation.status;
+        return result;
+    }
+
     result.status = program.status;
-    result.value = std::move(program.value);
+    result.value = std::move(*program.value);
     return result;
 }

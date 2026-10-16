@@ -2,6 +2,7 @@
 
 #include "desktop/Gcode_postprocessing_system.h"
 
+#include "application/cam/CamValidation.h"
 #include "cad/view/rendering/CamRenderLayer.h"
 #include "core/diagnostics/SummaryLog.h"
 
@@ -93,6 +94,53 @@ void Gcode_postprocessing_system::invalidateCurrentProcessPlan()
     invalidateCamDerivedResults(cadcam::cam::CamDerivedScope::PlanningDerived);
 }
 
+bool Gcode_postprocessing_system::publishValidatedProcessPlan
+(
+    cadcam::planning::ProcessPlan plan,
+    QString* failureMessage
+)
+{
+    const auto fail = [failureMessage](const QString& message)
+    {
+        if (failureMessage != nullptr) *failureMessage = message;
+        return false;
+    };
+
+    if (!m_camJob.hasGeometrySnapshot())
+    {
+        return fail(QStringLiteral("当前没有几何快照，无法验证加工计划。"));
+    }
+
+    const OperationContext context = createOperationContext(QStringLiteral("publish-process-plan"));
+    const OperationReport validation = cadcam::cam::CamValidation::validateProcessPlan
+    (
+        *m_camJob.geometrySnapshot(),
+        m_camJob.processState(),
+        plan,
+        context
+    );
+    if (!validation.succeeded())
+    {
+        const QString message = validation.diagnostics.isEmpty()
+            ? QStringLiteral("加工计划未通过一致性验证，未应用。")
+            : validation.diagnostics.constLast().userMessage;
+        // 诊断写入命令栏便于定位，但不修改任何业务状态。
+        if (ui != nullptr && ui->openGLWidget != nullptr)
+        {
+            for (const Diagnostic& diagnostic : validation.diagnostics)
+            {
+                ui->openGLWidget->appendCommandMessage
+                    (QStringLiteral("[计划验证] %1").arg(diagnostic.userMessage));
+            }
+            ui->openGLWidget->refreshCommandPrompt();
+        }
+        return fail(message);
+    }
+
+    m_camJob.setProcessPlan(std::move(plan));
+    return true;
+}
+
 void Gcode_postprocessing_system::applyMachineConfigurationChange(const GProfile& previousProfile)
 {
     // 四轴规划策略直接读取回转轴与刀具转移参数；只有这些字段变化且当前存在四轴计划时，
@@ -176,7 +224,11 @@ bool Gcode_postprocessing_system::applyProcessUnitSequenceToCurrentPlan
     candidatePlan.processUnitSequence = m_camJob.processState().processUnitSequence();
     candidatePlan.processStateRevision = m_camJob.processState().revision();
     candidatePresentation.value->processStateRevision = m_camJob.processState().revision();
-    m_camJob.setProcessPlan(std::move(candidatePlan));
+    // 发布边界验证：不一致的计划不进入 CamJob，也不在这里修复。
+    if (!publishValidatedProcessPlan(std::move(candidatePlan), errorMessage))
+    {
+        return false;
+    }
     ui->openGLWidget->camRenderLayer()->setPresentation(std::move(*candidatePresentation.value));
     ui->openGLWidget->update();
     return true;
@@ -245,7 +297,11 @@ bool Gcode_postprocessing_system::applyProcessUnitTraversalToCurrentPlan
 
     candidatePlan.processStateRevision = m_camJob.processState().revision();
     candidatePresentation.value->processStateRevision = m_camJob.processState().revision();
-    m_camJob.setProcessPlan(std::move(candidatePlan));
+    // 发布边界验证：不一致的计划不进入 CamJob，也不在这里修复。
+    if (!publishValidatedProcessPlan(std::move(candidatePlan), errorMessage))
+    {
+        return false;
+    }
     ui->openGLWidget->camRenderLayer()->setPresentation(std::move(*candidatePresentation.value));
     ui->openGLWidget->update();
     return true;

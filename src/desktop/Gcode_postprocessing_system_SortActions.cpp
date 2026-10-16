@@ -227,7 +227,16 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan2D
     m_camJob.processState().setProcessUnitSequence(resolvedPlan.processUnitSequence.units);
     resolvedPlan.processUnitSequence = m_camJob.processState().processUnitSequence();
     resolvedPlan.processStateRevision = m_camJob.processState().revision();
-    m_camJob.setProcessPlan(std::move(resolvedPlan));
+    // 发布边界验证：不一致的计划不进入 CamJob，也不在这里修复。
+    QString publishFailure;
+    if (!publishValidatedProcessPlan(std::move(resolvedPlan), &publishFailure))
+    {
+        ui->openGLWidget->appendCommandMessage(QStringLiteral("[加工计划] %1").arg(publishFailure));
+        ui->openGLWidget->refreshCommandPrompt();
+        statusBar()->showMessage(publishFailure, 8000);
+        QMessageBox::warning(this, commandTitle, publishFailure);
+        return false;
+    }
     auto presentation = cadcam::process::ProcessPresentationSnapshot::build
         (*m_camJob.processPlan(), context);
     if (!presentation.succeeded() || !presentation.value.has_value())
@@ -369,7 +378,16 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan3D
     m_camJob.processState().setProcessUnitSequence(resolvedPlan.processUnitSequence.units);
     resolvedPlan.processUnitSequence = m_camJob.processState().processUnitSequence();
     resolvedPlan.processStateRevision = m_camJob.processState().revision();
-    m_camJob.setProcessPlan(std::move(resolvedPlan));
+    // 发布边界验证：不一致的计划不进入 CamJob，也不在这里修复。
+    QString publishFailure;
+    if (!publishValidatedProcessPlan(std::move(resolvedPlan), &publishFailure))
+    {
+        ui->openGLWidget->appendCommandMessage(QStringLiteral("[加工计划] %1").arg(publishFailure));
+        ui->openGLWidget->refreshCommandPrompt();
+        statusBar()->showMessage(publishFailure, 8000);
+        QMessageBox::warning(this, commandTitle, publishFailure);
+        return false;
+    }
     auto presentation = cadcam::process::ProcessPresentationSnapshot::build
         (*m_camJob.processPlan(), context);
     if (!presentation.succeeded() || !presentation.value.has_value())

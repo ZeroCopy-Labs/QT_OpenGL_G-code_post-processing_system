@@ -3,6 +3,7 @@
 #include "application/geometry/GeometrySnapshot.h"
 #include "core/diagnostics/SummaryLog.h"
 
+#include "application/cam/CamValidation.h"
 #include "application/geometry/GeometrySamplingPolicy.h"
 #include "core/machine/ProcessUnitExecutionResolver.h"
 #include "core/machine/RotaryTrajectoryBuilder.h"
@@ -582,6 +583,24 @@ OperationResult<cadcam::machine::MachineTrajectory> MachineTrajectoryService::bu
     result.value = std::move(built.value);
     if (result.value.has_value())
     {
+        // 结果一致性检查：轨迹必须仍然与输入计划、几何快照和加工状态对应。
+        // 只做只读验证，不重新生成轨迹，也不修复任何状态。
+        const auto validation = cadcam::cam::CamValidation::validateMachineTrajectory
+        (
+            snapshot,
+            processState,
+            plan,
+            *result.value,
+            taskContext.operationContext
+        );
+        result.mergeDiagnostics(validation);
+        if (!validation.succeeded())
+        {
+            result.status = validation.status;
+            result.value.reset();
+            return result;
+        }
+
         logSurfaceSummaries(*result.value);
         logTransferSummaries(*result.value);
     }
