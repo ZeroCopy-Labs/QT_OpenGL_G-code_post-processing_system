@@ -1189,6 +1189,7 @@ void Gcode_postprocessing_system::openProfileSettingsDialog()
         return;
     }
 
+    const GProfile previousProfile = m_activeProfile;
     const GProfile updatedProfile = dialog.profile();
     const QString importedProfilePath = dialog.importedProfilePath().trimmed();
     MachiningParameterStore::save
@@ -1233,7 +1234,7 @@ void Gcode_postprocessing_system::openProfileSettingsDialog()
     }
 
     refreshAvailableProfilesUi();
-    invalidateCurrentProcessPlan();
+    applyMachineConfigurationChange(previousProfile);
     saveSelectedProfileId(m_activeProfileId);
     syncToolPanelState();
 
@@ -1401,10 +1402,11 @@ bool Gcode_postprocessing_system::applyLoadedProfileById(const QString& profileI
         return false;
     }
 
+    const GProfile previousProfile = m_activeProfile;
     m_activeProfileId = profileId;
     m_activeProfile = m_loadedProfiles.value(profileId, GProfile::createDefaultLaserProfile());
     MachiningParameterStore::applyTo(m_activeProfile);
-    invalidateCurrentProcessPlan();
+    applyMachineConfigurationChange(previousProfile);
     saveSelectedProfileId(m_activeProfileId);
     refreshAvailableProfilesUi();
     syncToolPanelState();
@@ -1836,7 +1838,8 @@ void Gcode_postprocessing_system::applyGenerationPreference(GCodeGenerationPrefe
     }
 
     m_generationPreference = preference;
-    invalidateCurrentProcessPlan();
+    // G 代码模式只决定导出时使用哪一种 NC，不改变几何快照、加工计划、轨迹或仿真。
+    invalidateCamDerivedResults(cadcam::cam::CamDerivedScope::OutputDerived);
     saveGenerationPreference(m_generationPreference);
 
     if (m_generationModeAutoAction != nullptr)
@@ -1910,12 +1913,16 @@ void Gcode_postprocessing_system::initializeMachiningSettingsDock()
     {
         m_camJob.settings().cutSurfacePositiveCorrection = enabled;
         saveCutSurfacePositiveCorrection(enabled);
+        // 断面修正只参与轨迹、NC 与仿真，不改变几何快照与加工计划。
+        invalidateCamDerivedResults(cadcam::cam::CamDerivedScope::MotionDerived);
     });
     connect(m_machiningSettingsWidget, &MachiningSettingsWidget::cutSurfaceNegativeCorrectionChanged,
         this, [this](bool enabled)
     {
         m_camJob.settings().cutSurfaceNegativeCorrection = enabled;
         saveCutSurfaceNegativeCorrection(enabled);
+        // 断面修正只参与轨迹、NC 与仿真，不改变几何快照与加工计划。
+        invalidateCamDerivedResults(cadcam::cam::CamDerivedScope::MotionDerived);
     });
     m_machiningSettingsDock->setWidget(m_machiningSettingsWidget);
     addDockWidget(Qt::RightDockWidgetArea, m_machiningSettingsDock);
@@ -2091,6 +2098,8 @@ void Gcode_postprocessing_system::initializeMachiningSettingsDock()
                 && std::abs(wallThickness - rotaryTubeWallThickness()) < 0.0005) return;
             m_camJob.settings().rotaryTubeWallThicknessOverride = wallThickness > 0.0
                 ? std::optional<double>(wallThickness) : std::nullopt;
+            // 方管壁厚只参与断面解算、轨迹、NC 与仿真，不改变几何快照与加工计划。
+            invalidateCamDerivedResults(cadcam::cam::CamDerivedScope::MotionDerived);
             syncMachiningSettingsState();
 
             const QString message = wallThickness > 0.0
@@ -2135,7 +2144,8 @@ void Gcode_postprocessing_system::initializeToolPanel()
 
         if (m_camJob.hasProcessPlan() && !m_camJob.isProcessPlanCurrent(m_document.contentRevision()))
         {
-            invalidateCurrentProcessPlan();
+            // CAD 变化同样使计划与下游结果失效。
+            invalidateCamDerivedResults(cadcam::cam::CamDerivedScope::GeometryDerived);
         }
         syncToolPanelState();
     });

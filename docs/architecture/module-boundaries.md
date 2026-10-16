@@ -95,7 +95,24 @@ CAD 与外部格式数据应在进入 Core 前完成捕获和适配。Core 计�
 
 共享视口用一个 `CadViewer` 承载三个渲染层。`CadRenderLayer` 只绘制 CAD 几何并执行上层给出的中立显示覆盖；`SelectionRenderLayer` 只绘制 CAD 选中、框选、手柄与吸附反馈；`CamRenderLayer` 只读取加工状态并绘制加工顺序、方向、排除淡化、旋转端面与预览，同时负责加工单元命中与选择扩展。
 
-共享视口内并列第四个层 `SimulationRenderLayer`：它只消费 `SimulationController` 提供的仿真轨迹与每帧展示快照，绘制当前机床位置、当前运动、已完成轨迹与仿真状态文字。仿真会话属于 Application（`application/simulation`），只读取当前有效的加工计划与既有运动结果，不持有 `CamJob`、不修改加工状态，也不依赖 `CadDocument` / `CadItem`；三轴当前以既有结构化 NC 运动作为桥接输入。
+CAM 生命周期规则集中在 `application/cam/CamLifecycle.h`：它只定义失效范围（`CamDerivedScope`）与由当前数据计算的 `CamReadiness` 就绪投影，不持有 UI、视图或编辑器，也不保存任何派生结果。真正的失效动作由桌面层 `invalidateCamDerivedResults(scope)` 执行，分别作用于 `CamJob`、`CamRenderLayer` 与仿真会话。
+
+共享视口内并列第四个层 `SimulationRenderLayer`'@ },
+  @{ f = 'docs\architecture\data-flow.md'
+     old = '仿真是归一化回放：不模拟真实机床时间，不重新规划，不修改 CAD 与加工状态，也不解析 G-code。计划失效时当前仿真会话被清除。'
+     new = @'
+仿真是归一化回放：不模拟真实机床时间，不重新规划，不修改 CAD 与加工状态，也不解析 G-code。计划失效时当前仿真会话被清除。
+
+失效按数据依赖分四个范围，只影响真正依赖上游的结果：
+
+```text
+CAD 变化            → GeometryDerived：快照、计划、CAM 展示、仿真
+加工状态变化        → PlanningDerived：计划、CAM 展示、仿真（快照保持有效）
+机床运动配置变化    → MotionDerived：仿真（快照、计划、CAM 展示保持有效）
+后处理配置变化      → OutputDerived：仅输出文本
+```
+
+每次失效都只清除派生结果，不清除加工状态、加工设置、方管截面或用户确认的加工输入。：它只消费 `SimulationController` 提供的仿真轨迹与每帧展示快照，绘制当前机床位置、当前运动、已完成轨迹与仿真状态文字。仿真会话属于 Application（`application/simulation`），只读取当前有效的加工计划与既有运动结果，不持有 `CamJob`、不修改加工状态，也不依赖 `CadDocument` / `CadItem`；三轴当前以既有结构化 NC 运动作为桥接输入。
 
 图元选择通过稳定图元身份映射到加工单元选择，一个加工单元只显示一个顺序编号。加工单元身份和序列由 Core 与 Application 提供，渲染层不自行生成或保存这些业务事实，也不修改加工状态：`CamRenderLayer` 只发出交互请求，由桌面层修改 `CamJob` 与 `ProcessState`。GPU 缓存键、临时选择状态、CAM 显示开关与旋转预览参数仅在 Viewer 生命周期内使用；显示偏好的持久化仍由桌面层设置负责。Phase 8 的 SimulationRenderLayer 可以与这三层并列挂到同一视口。
 

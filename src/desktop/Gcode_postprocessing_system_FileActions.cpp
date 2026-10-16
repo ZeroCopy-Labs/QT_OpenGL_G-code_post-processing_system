@@ -71,8 +71,8 @@ bool Gcode_postprocessing_system::importDxfFile(const QString& filePath)
     m_editer.clearHistory();
     m_camJob.processState().clear();
     // 旧文档的几何快照不再对应当前文档，导入时直接释放。
-    m_camJob.invalidateGeometrySnapshot();
-    invalidateCurrentProcessPlan();
+    // 导入新文档属于几何派生失效：快照与加工计划一起失效。
+    invalidateCamDerivedResults(cadcam::cam::CamDerivedScope::GeometryDerived);
     if (!m_document.readDxfDocument(filePath))
     {
         QMessageBox::warning
@@ -218,7 +218,7 @@ bool Gcode_postprocessing_system::importBitmapFile(const QString& filePath)
     if (replaceExisting)
     {
         m_camJob.processState().clear();
-        invalidateCurrentProcessPlan();
+        invalidateCamDerivedResults(cadcam::cam::CamDerivedScope::GeometryDerived);
         // 替换文档内容后旧几何快照不再有效。
         m_camJob.invalidateGeometrySnapshot();
         m_rotaryTubeSectionModel = RotaryTubeSectionModel();

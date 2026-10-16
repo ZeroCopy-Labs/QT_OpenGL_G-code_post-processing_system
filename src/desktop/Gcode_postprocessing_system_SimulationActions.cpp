@@ -50,14 +50,16 @@ bool Gcode_postprocessing_system::prepareSimulation()
 {
     const OperationContext context = createOperationContext(QStringLiteral("prepare-simulation"));
 
-    if (!m_camJob.hasProcessPlan() || !m_camJob.isProcessPlanCurrent(m_document.contentRevision()))
+    // 仿真前置条件同样来自就绪投影：完全由当前数据计算，不单独保存状态。
+    const cadcam::cam::CamReadiness readiness =
+        cadcam::cam::evaluateCamReadiness(m_camJob, m_document.contentRevision(), m_simulation.isLoaded());
+    if (!readiness.hasProcessPlan || !readiness.processPlanCurrent)
     {
         QMessageBox::warning(this, QStringLiteral("仿真"),
             QStringLiteral("当前没有有效的加工计划，请先完成 CAM Planning。"));
         return false;
     }
-    if (!m_camJob.hasGeometrySnapshot()
-        || !m_camJob.isGeometrySnapshotCurrent(m_document.contentRevision()))
+    if (!readiness.geometrySnapshotCurrent)
     {
         QMessageBox::warning(this, QStringLiteral("仿真"),
             QStringLiteral("当前几何快照已失效，请重新执行 Planning。"));

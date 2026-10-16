@@ -35,29 +35,87 @@
 
 void Gcode_postprocessing_system::invalidateProcessOrdersAfterEndCutChange()
 {
-    invalidateCurrentProcessPlan();
+    invalidateCamDerivedResults(cadcam::cam::CamDerivedScope::PlanningDerived);
 }
 
-void Gcode_postprocessing_system::invalidateCurrentProcessPlan()
+// 按数据依赖关系失效 CAM 派生结果。
+//
+// 真实结果对象与 revision 是事实源，这里只负责让不再与上游一致的结果失效：
+// - 几何派生：CAD 变化 → 几何快照、加工计划与全部下游结果失效；
+// - 规划派生：加工状态变化 → 加工计划与下游结果失效，几何快照保持有效；
+// - 运动派生：机床运动配置变化 → 轨迹、NC 与仿真会话失效，快照与加工计划保持有效；
+// - 输出派生：后处理配置变化 → 没有需要失效的内存派生结果。
+// 用户业务输入（加工状态、加工设置、方管截面、加工断面确认结果）不在这里被清除。
+void Gcode_postprocessing_system::invalidateCamDerivedResults
+(
+    cadcam::cam::CamDerivedScope scope
+)
 {
+    if (cadcam::cam::camDerivedScopeInvalidatesGeometrySnapshot(scope))
+    {
+        m_camJob.invalidateGeometrySnapshot();
+    }
+
+    if (cadcam::cam::camDerivedScopeInvalidatesProcessPlan(scope))
     {
         BoundaryPerformanceTimer stateTimer
             (m_boundaryAssignmentPerformanceReport != nullptr
                 ? &m_boundaryAssignmentPerformanceReport->processStateUpdateMs : nullptr);
         m_camJob.invalidateProcessPlan();
     }
-    if (ui != nullptr && ui->openGLWidget != nullptr)
+
+    if (ui == nullptr || ui->openGLWidget == nullptr)
+    {
+        return;
+    }
+
+    BoundaryPerformanceTimer viewerTimer
+        (m_boundaryAssignmentPerformanceReport != nullptr
+            ? &m_boundaryAssignmentPerformanceReport->viewerRefreshMs : nullptr);
+
+    if (cadcam::cam::camDerivedScopeInvalidatesProcessPlan(scope))
     {
         // 计划失效后清除 CAM 展示快照，避免旧的顺序、箭头和排除状态继续显示。
         ui->openGLWidget->camRenderLayer()->clearPresentation();
-        // 仿真基于加工结果，计划失效后同样清除当前仿真会话，避免播放过期轨迹。
-        clearSimulation();
-        BoundaryPerformanceTimer viewerTimer
-            (m_boundaryAssignmentPerformanceReport != nullptr
-                ? &m_boundaryAssignmentPerformanceReport->viewerRefreshMs : nullptr);
-    
-        ui->openGLWidget->update();
     }
+
+    if (cadcam::cam::camDerivedScopeInvalidatesSimulationSession(scope))
+    {
+        // 仿真消费加工计划与机床运动结果，上游失效后清除会话，避免继续播放过期轨迹。
+        clearSimulation();
+    }
+
+    ui->openGLWidget->update();
+}
+
+void Gcode_postprocessing_system::invalidateCurrentProcessPlan()
+{
+    invalidateCamDerivedResults(cadcam::cam::CamDerivedScope::PlanningDerived);
+}
+
+void Gcode_postprocessing_system::applyMachineConfigurationChange(const GProfile& previousProfile)
+{
+    // 四轴规划策略直接读取回转轴与刀具转移参数；只有这些字段变化且当前存在四轴计划时，
+    // 加工计划本身才需要重建。其余机床运动与后处理配置只影响轨迹、NC、仿真与输出文本。
+    const bool rotaryPlanningInputsChanged =
+        !previousProfile.hasSameRotaryPlanningInputs(m_activeProfile);
+    const bool hasRotaryPlan = m_camJob.hasProcessPlan()
+        && m_camJob.processPlan()->mode == cadcam::planning::ProcessPlanMode::Rotary4Axis;
+
+    if (rotaryPlanningInputsChanged && hasRotaryPlan)
+    {
+        invalidateCamDerivedResults(cadcam::cam::CamDerivedScope::PlanningDerived);
+        return;
+    }
+
+    if (!previousProfile.hasSameMachineMotionInputs(m_activeProfile))
+    {
+        invalidateCamDerivedResults(cadcam::cam::CamDerivedScope::MotionDerived);
+        return;
+    }
+
+    // 只有 G 代码规则变化：几何快照、加工计划、轨迹与仿真都保持有效，输出文本重新生成即可。
+    invalidateCamDerivedResults(cadcam::cam::CamDerivedScope::OutputDerived);
 }
 
 bool Gcode_postprocessing_system::applyProcessUnitSequenceToCurrentPlan

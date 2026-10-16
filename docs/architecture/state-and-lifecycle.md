@@ -52,6 +52,8 @@
 
 当前有效加工上下文与 CAD 几何共同决定加工计划。选择状态和 Viewer 显示开关仅改变交互或展示，不改变加工业务输入或自动分析状态。
 
+用户业务输入不会因为重新规划、重新仿真或重新导出而被清除：CAD 变化使几何派生结果失效，加工状态变化使规划派生结果失效，机床运动配置变化只使轨迹与仿真失效，后处理配置变化只影响输出文本。范围定义与判定见第 5 节。
+
 ## 4. 加工单元序列状态
 
 Core 根据统一加工路径及连续关系形成 `ProcessUnit` 集合。每个单元使用其全部稳定图元身份的排序规范集合作为 `ProcessUnitKey`。Application 保存并编辑唯一的 `ProcessUnitSequence`，序列位置产生连续的 `1..N` 加工编号。
@@ -73,23 +75,60 @@ CAD 几何编辑与这两类加工状态编辑按实际发生顺序共同 Undo/R
 四轴：ProcessPlan → MachineTrajectory → NcProgram → G-code 文本
 ```
 
-状态失效遵循上游变化使下游结果失效的原则：
+完整的 CAM 生命周期：
 
-| 变化 | 失效结果 | 保留内容 |
-| --- | --- | --- |
-| 文档几何、图层或颜色变化 | 旧加工计划及其全部下游结果 | 仍可关联的用户业务输入 |
-| 加工启用、方向、起点或加工单元序列变化 | 旧加工计划及其全部下游结果 | CAD 文档内容和当前加工单元集合 |
-| 内部线、加工断面或废面变化 | 旧加工计划及其全部下游结果 | CAD 图元和当前业务输入 |
-| 方管截面变化 | 依赖截面的分析、计划及其下游结果 | 普通四轴所需的其他输入 |
-| 排序配置变化 | 旧加工计划及其全部下游结果 | CAD 文档和加工上下文 |
-| 机床运动配置变化 | 四轴机床轨迹、NC 程序和 G-code 文本 | 当前有效加工计划 |
-| 纯代码格式规则变化 | G-code 文本 | 加工计划、四轴轨迹和 NC 语义 |
+```text
+CadDocument（contentRevision）
+  → GeometrySnapshot（contentRevision）
+  → ProcessPlan（contentRevision + processStateRevision）
+  → MachineTrajectory（四轴）或 NcProgram（三轴）
+  → SimulationTrajectory / 仿真会话
+  → NcProgram → G-code 文本
+```
 
-排序配置包括排序方式及影响计划构建的策略。机床运动配置包括旋转轴中心、安全距离、加工面 Z 修正、过切、A 轴规则和初始机床位置。纯代码格式规则包括文件、类型、图层、颜色和自定义代码的文本输出规则。
+### 5.1 事实源与就绪投影
+
+真实结果对象加 revision 是唯一事实源：`CamJob` 的几何快照与加工计划各自携带来源 revision，`MachineTrajectory` 与 `NcProgram` 携带生成时的 content / processState revision。
+
+系统不保存“CAM 当前处于哪个阶段”的独立状态变量，也不维护 `hasPlan`、`hasTrajectory`、`simulationReady` 这类并行事实。界面与前置条件使用 `application/cam/CamLifecycle.h` 的 `CamReadiness`，它完全由当前数据计算：快照是否存在且与文档 revision 一致、计划是否存在且与文档 revision 和加工状态 revision 一致、是否已有仿真会话。导出与仿真准备都直接读取这份投影，不再各自重复判断。
+
+### 5.2 派生结果依赖表
+
+| 派生结果 | 直接上游 | 保存的来源信息 | 当前持有者 |
+| --- | --- | --- | --- |
+| `GeometrySnapshot` | `CadDocument` 图元与属性 | `contentRevision` | `CamJob` |
+| `ProcessPlan` | `GeometrySnapshot`、`DocumentProcessState` | `contentRevision`、`processStateRevision` | `CamJob` |
+| `MachineTrajectory` | 计划、快照、加工状态、方管截面、加工配置 | `contentRevision`、`processStateRevision` | 导出与仿真调用中的临时结果 |
+| `NcProgram` | 三轴：计划 + 快照；四轴：轨迹 + 计划 | `contentRevision`、`processStateRevision` | 导出与仿真调用中的临时结果 |
+| `SimulationTrajectory` / 仿真会话 | 轨迹或 NC 结构化运动 | 由输入结果决定 | `SimulationController`（桌面层持有） |
+| `ProcessPresentationSnapshot` | 加工计划 | 计划内容 | `CamRenderLayer` |
+| G-code 文本 | NC 程序与后处理配置 | 无（一次性文本） | 导出调用中的临时结果 |
+
+### 5.3 失效矩阵
+
+失效入口是桌面层的 `invalidateCamDerivedResults(scope)`，范围由真实数据依赖决定（`application/cam/CamLifecycle.h`）：
+
+| 变化 | 范围 | 失效结果 | 保留内容 |
+| --- | --- | --- | --- |
+| 文档几何、图层或颜色变化（含 Undo / Redo） | `GeometryDerived` | 几何快照、加工计划、CAM 展示、仿真会话 | 加工状态、加工设置、方管截面与用户确认的加工输入 |
+| 加工启用、方向、起点、加工单元序列变化 | `PlanningDerived` | 加工计划、CAM 展示、仿真会话 | 几何快照、CAD 文档与加工状态本身 |
+| 内部线、加工断面、废面变化 | `PlanningDerived` | 加工计划、CAM 展示、仿真会话 | 几何快照、CAD 图元与业务输入 |
+| 方管截面识别或中心变化 | `PlanningDerived` | 加工计划、CAM 展示、仿真会话 | 几何快照与 CAD 文档 |
+| 排序方式变化（排序即重新生成计划） | `PlanningDerived` | 旧计划、CAM 展示、仿真会话 | 几何快照与 CAD 文档 |
+| 四轴规划输入变化（回转轴中心、A 轴规则、安全距离、Z 修正、过切、初始机床点、扫掠方向、转移参数），且当前存在四轴计划 | `PlanningDerived` | 加工计划、CAM 展示、仿真会话 | 几何快照与 CAD 文档 |
+| 机床运动配置变化但四轴规划输入未变（例如安全抬刀开关） | `MotionDerived` | 仿真会话（轨迹与 NC 本就不缓存） | 几何快照、加工计划、CAM 展示 |
+| 方管壁厚覆盖、断面正/负向修正变化 | `MotionDerived` | 仿真会话 | 几何快照、加工计划、CAM 展示 |
+| 纯 G 代码格式规则变化、G 代码模式偏好变化 | `OutputDerived` | 没有需要失效的内存派生结果（文本重新生成） | 几何快照、加工计划、CAM 展示、仿真会话 |
+
+规划输入变化的判定是 `GProfile::hasSameRotaryPlanningInputs()`，机床运动输入变化的判定是 `GProfile::hasSameMachineMotionInputs()`；两者都与生产代码实际读取的字段一致，不按参数名称猜测。
 
 失效仅清除或拒绝使用派生结果，不反向删除用户业务输入或自动分析状态。重新生成时，系统使用当前文档、当前加工上下文和当前配置建立新结果。
 
-加工计划的失效入口是 `CamJob::invalidateProcessPlan()`；`CamJob::isProcessPlanCurrent(documentContentRevision)` 判断当前计划是否仍匹配文档内容 revision 和加工状态 revision。计划整体替换，不做原位修改。撤销和重做同样按“状态发生实际变化即推进 revision”的规则处理，revision 不倒退。
+加工计划的失效入口仍是 `CamJob::invalidateProcessPlan()`（由 `PlanningDerived` 复用）；`CamJob::isProcessPlanCurrent(documentContentRevision)` 判断当前计划是否仍匹配文档内容 revision 和加工状态 revision。计划整体替换，不做原位修改。撤销和重做同样按“状态发生实际变化即推进 revision”的规则处理，revision 不倒退。
+
+### 5.4 为什么不把派生结果放进 CamJob
+
+`MachineTrajectory`、`NcProgram`、`SimulationTrajectory` 与仿真会话都按需重新生成，当前不长期缓存：导出与仿真在需要时按有效计划重新计算。因此 `CamJob` 仍然只拥有几何快照、加工状态、加工设置和加工计划；生命周期通过 revision 与失效范围表达，而不是通过增加缓存成员表达。
 
 ## 6. 方管截面状态
 

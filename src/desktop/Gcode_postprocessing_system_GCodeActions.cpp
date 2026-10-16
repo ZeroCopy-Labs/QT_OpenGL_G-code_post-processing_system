@@ -442,7 +442,10 @@ OperationReport Gcode_postprocessing_system::prepareDocumentForGCodeExport
         ? cadcam::planning::ProcessPlanMode::Rotary4Axis
         : cadcam::planning::ProcessPlanMode::Planar3Axis;
     // 导出是消费结果的阶段：只验证当前 CAM 任务是否有效，不自动排序、不建立快照、不修复状态。
-    if (!m_camJob.hasProcessPlan())
+    // 就绪状态完全由当前数据计算，不单独保存。
+    const cadcam::cam::CamReadiness readiness =
+        cadcam::cam::evaluateCamReadiness(m_camJob, m_document.contentRevision(), m_simulation.isLoaded());
+    if (!readiness.hasProcessPlan)
     {
         report.status = OperationStatus::Conflict;
         report.addDiagnostic(makeExportDiagnostic
@@ -457,7 +460,7 @@ OperationReport Gcode_postprocessing_system::prepareDocumentForGCodeExport
         return report;
     }
 
-    if (!m_camJob.isProcessPlanCurrent(m_document.contentRevision()))
+    if (!readiness.processPlanCurrent)
     {
         report.status = OperationStatus::Conflict;
         report.addDiagnostic(makeExportDiagnostic
@@ -473,8 +476,7 @@ OperationReport Gcode_postprocessing_system::prepareDocumentForGCodeExport
     }
 
     if (m_camJob.processPlan()->mode != requiredPlanMode
-        || !m_camJob.hasGeometrySnapshot()
-        || !m_camJob.isGeometrySnapshotCurrent(m_document.contentRevision()))
+        || !readiness.geometrySnapshotCurrent)
     {
         report.status = OperationStatus::Conflict;
         report.addDiagnostic(makeExportDiagnostic

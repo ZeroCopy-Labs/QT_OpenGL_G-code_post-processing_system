@@ -41,7 +41,8 @@ bool Gcode_postprocessing_system::toggleSelectedEntityReverse()
         return false;
     }
 
-    invalidateCurrentProcessPlan();
+    // CAD 几何变化属于几何派生失效：快照、加工计划与下游结果一起失效。
+    invalidateCamDerivedResults(cadcam::cam::CamDerivedScope::GeometryDerived);
 
     ui->openGLWidget->appendCommandMessage
     (

@@ -841,3 +841,78 @@ QString GProfile::colorKeyFromAci(int colorIndex)
 {
     return colorIndex >= 0 ? QStringLiteral("ACI:%1").arg(colorIndex) : QString();
 }
+
+bool GProfile::hasSameRotaryPlanningInputs(const GProfile& other) const
+{
+    // 与四轴规划策略实际读取的字段保持一致：四轴排序、加工单元边界、安全转移与扫掠方向。
+    const GProfileRotaryAxisConfig& left = m_rotaryAxisConfig;
+    const GProfileRotaryAxisConfig& right = other.m_rotaryAxisConfig;
+    const bool sameAxis =
+        left.centerY == right.centerY
+        && left.centerZ == right.centerZ
+        && left.aAxisOffsetDegrees == right.aAxisOffsetDegrees
+        && left.machiningPlaneZOffset == right.machiningPlaneZOffset
+        && left.overcutDistance == right.overcutDistance
+        && left.lazyRotationProcessing == right.lazyRotationProcessing
+        && left.invertAAxisDirection == right.invertAAxisDirection
+        && left.keepContinuousAngle == right.keepContinuousAngle
+        && left.useInitialMachinePoint == right.useInitialMachinePoint
+        && left.perimeterSweepDirection == right.perimeterSweepDirection
+        && left.longitudinalSweepDirection == right.longitudinalSweepDirection
+        && left.initialMachineX == right.initialMachineX
+        && left.initialMachineY == right.initialMachineY
+        && left.initialMachineZ == right.initialMachineZ;
+
+    if (!sameAxis)
+    {
+        return false;
+    }
+
+    const GProfileToolTransferConfig& leftTransfer = m_toolTransferConfig;
+    const GProfileToolTransferConfig& rightTransfer = other.m_toolTransferConfig;
+    const cadcam::machine::SameZoneTransferParameters& leftSameZone = leftTransfer.sameZone;
+    const cadcam::machine::SameZoneTransferParameters& rightSameZone = rightTransfer.sameZone;
+
+    return leftTransfer.rotationSafetyClearance == rightTransfer.rotationSafetyClearance
+        && leftTransfer.sameZoneTransferClearance == rightTransfer.sameZoneTransferClearance
+        && leftTransfer.coordinatedTransferEnabled == rightTransfer.coordinatedTransferEnabled
+        && leftSameZone.minimumRetractHeight == rightSameZone.minimumRetractHeight
+        && leftSameZone.minimumApproachHeight == rightSameZone.minimumApproachHeight
+        && leftSameZone.automaticTotalHeight == rightSameZone.automaticTotalHeight
+        && leftSameZone.departureRatio == rightSameZone.departureRatio
+        && leftSameZone.approachRatio == rightSameZone.approachRatio;
+}
+bool GProfile::hasSameMachineMotionInputs(const GProfile& other) const
+{
+    // 轨迹、NC 与仿真读取回转轴配置和刀具转移配置的全部字段（含安全抬刀与初始机床点）。
+    const GProfileRotaryAxisConfig& left = m_rotaryAxisConfig;
+    const GProfileRotaryAxisConfig& right = other.m_rotaryAxisConfig;
+    const GProfileToolTransferConfig& leftTransfer = m_toolTransferConfig;
+    const GProfileToolTransferConfig& rightTransfer = other.m_toolTransferConfig;
+    const cadcam::machine::SameZoneTransferParameters& leftSameZone = leftTransfer.sameZone;
+    const cadcam::machine::SameZoneTransferParameters& rightSameZone = rightTransfer.sameZone;
+
+    return left.centerY == right.centerY
+        && left.centerZ == right.centerZ
+        && left.aAxisOffsetDegrees == right.aAxisOffsetDegrees
+        && left.machiningPlaneZOffset == right.machiningPlaneZOffset
+        && left.overcutDistance == right.overcutDistance
+        && left.lazyRotationProcessing == right.lazyRotationProcessing
+        && left.invertAAxisDirection == right.invertAAxisDirection
+        && left.keepContinuousAngle == right.keepContinuousAngle
+        && left.useSafeZBeforeRapid == right.useSafeZBeforeRapid
+        && left.useInitialMachinePoint == right.useInitialMachinePoint
+        && left.perimeterSweepDirection == right.perimeterSweepDirection
+        && left.longitudinalSweepDirection == right.longitudinalSweepDirection
+        && left.initialMachineX == right.initialMachineX
+        && left.initialMachineY == right.initialMachineY
+        && left.initialMachineZ == right.initialMachineZ
+        && leftTransfer.rotationSafetyClearance == rightTransfer.rotationSafetyClearance
+        && leftTransfer.sameZoneTransferClearance == rightTransfer.sameZoneTransferClearance
+        && leftTransfer.coordinatedTransferEnabled == rightTransfer.coordinatedTransferEnabled
+        && leftSameZone.minimumRetractHeight == rightSameZone.minimumRetractHeight
+        && leftSameZone.minimumApproachHeight == rightSameZone.minimumApproachHeight
+        && leftSameZone.automaticTotalHeight == rightSameZone.automaticTotalHeight
+        && leftSameZone.departureRatio == rightSameZone.departureRatio
+        && leftSameZone.approachRatio == rightSameZone.approachRatio;
+}

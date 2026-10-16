@@ -111,6 +111,16 @@ public:
     void setToolTransferConfig(const GProfileToolTransferConfig& config);
     const GProfileToolTransferConfig& toolTransferConfig() const;
 
+    // 四轴加工规划直接读取的回转轴与刀具转移参数是否相同。
+    //
+    // 这些字段会改变四轴加工计划的顺序、方向、起点和加工单元边界，因此变化时需要重建计划；
+    // 其余机床运动与后处理配置只影响轨迹、NC、仿真和 G 代码文本，不影响已有多轴计划。
+    bool hasSameRotaryPlanningInputs(const GProfile& other) const;
+
+    // 轨迹、NC 与仿真读取的机床运动参数是否相同：回转轴配置与刀具转移配置全部字段。
+    // 这些字段变化时轨迹、NC 与仿真需要重建，但几何快照、加工计划与 CAM 展示保持有效。
+    bool hasSameMachineMotionInputs(const GProfile& other) const;
+
     static QString normalizeEntityTypeKey(const QString& entityType);
     static QString normalizeLayerKey(const QString& layerName);
     static QString normalizeColorKey(const QString& colorKey);

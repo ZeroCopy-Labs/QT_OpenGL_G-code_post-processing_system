@@ -16,6 +16,7 @@
 #include "infrastructure/config/RecentDocumentStore.h"
 #include "core/planning/ProcessPlan.h"
 #include "application/cam/CamJob.h"
+#include "application/cam/CamLifecycle.h"
 #include "application/simulation/SimulationController.h"
 
 
@@ -241,7 +242,13 @@ private:
     int refreshWasteProcessingExclusions
         (const RotaryBoundaryOperationGeometry& geometry);
     void invalidateProcessOrdersAfterEndCutChange();
+    // 按数据依赖关系失效 CAM 派生结果：几何派生、规划派生、运动派生或输出派生。
+    // 用户业务输入（加工状态、加工设置、方管截面等）不在这里被清除。
+    void invalidateCamDerivedResults(cadcam::cam::CamDerivedScope scope);
+    // 计划派生结果的失效入口：加工状态变化使用它。
     void invalidateCurrentProcessPlan();
+    // 机床运动配置变化的失效入口：按四轴规划输入是否变化决定失效范围。
+    void applyMachineConfigurationChange(const GProfile& previousProfile);
     // 确保 CamJob 持有与当前文档 revision 一致的几何快照；
     // 仅当快照缺失或过期时捕获并编译，不建立全局快照管理器。
     bool ensureCurrentGeometrySnapshot(const OperationContext& context);
