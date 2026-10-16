@@ -15,7 +15,7 @@
 #include "infrastructure/config/GProfile.h"
 #include "infrastructure/config/RecentDocumentStore.h"
 #include "core/planning/ProcessPlan.h"
-#include "application/process/DocumentProcessState.h"
+#include "application/cam/CamJob.h"
 #include "application/process/ProcessPresentationSnapshot.h"
 
 #include <QtWidgets/QMainWindow>
@@ -290,12 +290,9 @@ private:
     AppBranding m_branding;
     AppLicense m_license;
     RotaryTubeSectionModel m_rotaryTubeSectionModel;
-    std::optional<double> m_rotaryTubeWallThicknessOverride;
-    bool m_cutSurfacePositiveCorrection = false;
-    bool m_cutSurfaceNegativeCorrection = false;
     GProfile m_activeProfile = GProfile::createDefaultLaserProfile();
-    cadcam::process::DocumentProcessState m_processState;
-    std::optional<cadcam::planning::ProcessPlan> m_currentProcessPlan;
+    // 当前 CAM 加工任务：拥有加工状态、加工设置和当前有效的加工计划。
+    cadcam::cam::CamJob m_camJob;
     std::optional<cadcam::process::ProcessPresentationSnapshot> m_processPresentation;
     BoundaryAssignmentPerformanceReport* m_boundaryAssignmentPerformanceReport = nullptr;
     QString m_currentLayerName = QStringLiteral("0");

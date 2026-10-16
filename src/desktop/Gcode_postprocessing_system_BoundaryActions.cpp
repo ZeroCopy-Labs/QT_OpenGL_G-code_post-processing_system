@@ -137,7 +137,7 @@ bool Gcode_postprocessing_system::assignSelectedRotaryEndCut()
 
     for (const CadItem* item : expandedItems)
     {
-        if (item != nullptr && m_processState.stateOrDefault(item->m_entityId)
+        if (item != nullptr && m_camJob.processState().stateOrDefault(item->m_entityId)
             .overrideData.boundaryRole != cadcam::planning::BoundaryRole::None)
         {
             QMessageBox::warning
@@ -158,7 +158,7 @@ bool Gcode_postprocessing_system::assignSelectedRotaryEndCut()
         {
             continue;
         }
-        const auto state = m_processState.stateOrDefault(entity->m_entityId);
+        const auto state = m_camJob.processState().stateOrDefault(entity->m_entityId);
         if (state.overrideData.boundaryRole != cadcam::planning::BoundaryRole::None)
             highestBoundaryId = std::max(highestBoundaryId, state.overrideData.boundaryPairId);
     }
@@ -169,7 +169,7 @@ bool Gcode_postprocessing_system::assignSelectedRotaryEndCut()
         BoundaryPerformanceTimer stateTimer
             (m_boundaryAssignmentPerformanceReport != nullptr
                 ? &m_boundaryAssignmentPerformanceReport->processStateUpdateMs : nullptr);
-        m_processState.beginBatch();
+        m_camJob.processState().beginBatch();
         for (CadItem* item : expandedItems)
         {
             if (item == nullptr)
@@ -177,10 +177,10 @@ bool Gcode_postprocessing_system::assignSelectedRotaryEndCut()
                 continue;
             }
 
-            m_processState.setBoundary
+            m_camJob.processState().setBoundary
                 (item->m_entityId, cadcam::planning::BoundaryRole::Break, boundaryId);
         }
-        m_processState.endBatch();
+        m_camJob.processState().endBatch();
     }
 
     const QString message = QStringLiteral("已指定加工断面 断%1，共识别 %2 个相连图元，已通过方管周向分离验证。")
@@ -224,7 +224,7 @@ bool Gcode_postprocessing_system::assignSelectedWasteEndCut()
 
     for (const CadItem* item : expandedItems)
     {
-        if (item != nullptr && m_processState.stateOrDefault(item->m_entityId)
+        if (item != nullptr && m_camJob.processState().stateOrDefault(item->m_entityId)
             .overrideData.boundaryRole != cadcam::planning::BoundaryRole::None)
         {
             QMessageBox::warning(this, QStringLiteral("指定废面"), QStringLiteral("选中的图元已属于一个加工断面边界，请先清除原加工断面指定。"));
@@ -238,7 +238,7 @@ bool Gcode_postprocessing_system::assignSelectedWasteEndCut()
     {
         if (entity != nullptr)
         {
-            const auto state = m_processState.stateOrDefault(entity->m_entityId);
+            const auto state = m_camJob.processState().stateOrDefault(entity->m_entityId);
             if (state.overrideData.boundaryRole != cadcam::planning::BoundaryRole::None)
                 highestBoundaryId = std::max(highestBoundaryId, state.overrideData.boundaryPairId);
         }
@@ -250,7 +250,7 @@ bool Gcode_postprocessing_system::assignSelectedWasteEndCut()
         BoundaryPerformanceTimer stateTimer
             (m_boundaryAssignmentPerformanceReport != nullptr
                 ? &m_boundaryAssignmentPerformanceReport->processStateUpdateMs : nullptr);
-        m_processState.beginBatch();
+        m_camJob.processState().beginBatch();
         for (CadItem* item : expandedItems)
         {
             if (item == nullptr)
@@ -258,10 +258,10 @@ bool Gcode_postprocessing_system::assignSelectedWasteEndCut()
                 continue;
             }
 
-            m_processState.setBoundary
+            m_camJob.processState().setBoundary
                 (item->m_entityId, cadcam::planning::BoundaryRole::Waste, wasteId);
         }
-        m_processState.endBatch();
+        m_camJob.processState().endBatch();
     }
 
     invalidateProcessOrdersAfterEndCutChange();
@@ -530,7 +530,7 @@ bool Gcode_postprocessing_system::toggleSelectedRotaryEndCutAssignment()
     (
         selectedItems.begin(), selectedItems.end(), [this](const CadItem* item)
         {
-            return item != nullptr && m_processState.stateOrDefault(item->m_entityId)
+            return item != nullptr && m_camJob.processState().stateOrDefault(item->m_entityId)
                 .overrideData.boundaryRole == cadcam::planning::BoundaryRole::None;
         }
     );
@@ -538,7 +538,7 @@ bool Gcode_postprocessing_system::toggleSelectedRotaryEndCutAssignment()
     (
         selectedItems.begin(), selectedItems.end(), [this](const CadItem* item)
         {
-            return item != nullptr && m_processState.stateOrDefault(item->m_entityId)
+            return item != nullptr && m_camJob.processState().stateOrDefault(item->m_entityId)
                 .overrideData.boundaryRole != cadcam::planning::BoundaryRole::None;
         }
     );
@@ -588,7 +588,7 @@ bool Gcode_postprocessing_system::toggleSelectedRotaryEndCutAssignment()
     {
         if (entity != nullptr)
         {
-            const auto state = m_processState.stateOrDefault(entity->m_entityId);
+            const auto state = m_camJob.processState().stateOrDefault(entity->m_entityId);
             if (state.overrideData.boundaryPairId >= nextBoundaryId)
                 nextBoundaryId = state.overrideData.boundaryPairId + 1;
         }
@@ -598,13 +598,13 @@ bool Gcode_postprocessing_system::toggleSelectedRotaryEndCutAssignment()
         BoundaryPerformanceTimer stateTimer
             (m_boundaryAssignmentPerformanceReport != nullptr
                 ? &m_boundaryAssignmentPerformanceReport->processStateUpdateMs : nullptr);
-        m_processState.beginBatch();
+        m_camJob.processState().beginBatch();
         for (CadItem* item : boundaryItems)
         {
-            if (item != nullptr) m_processState.setBoundary
+            if (item != nullptr) m_camJob.processState().setBoundary
                 (item->m_entityId, cadcam::planning::BoundaryRole::Break, nextBoundaryId);
         }
-        m_processState.endBatch();
+        m_camJob.processState().endBatch();
     }
 
     invalidateProcessOrdersAfterEndCutChange();
@@ -657,7 +657,7 @@ bool Gcode_postprocessing_system::recognizeAllRotaryEndCuts(bool interactive)
 
     for (CadItem* item : documentItems)
     {
-        const auto state = m_processState.stateOrDefault(item->m_entityId);
+        const auto state = m_camJob.processState().stateOrDefault(item->m_entityId);
         if (state.overrideData.boundaryPairId >= nextBoundaryId)
         {
             nextBoundaryId = state.overrideData.boundaryPairId + 1;
@@ -670,7 +670,7 @@ bool Gcode_postprocessing_system::recognizeAllRotaryEndCuts(bool interactive)
     for (CadItem* seedItem : documentItems)
     {
         if (seedItem == nullptr
-            || m_processState.stateOrDefault(seedItem->m_entityId)
+            || m_camJob.processState().stateOrDefault(seedItem->m_entityId)
                 .overrideData.boundaryRole != cadcam::planning::BoundaryRole::None
             || attemptedBoundaryItems.contains(seedItem))
         {
@@ -712,7 +712,7 @@ bool Gcode_postprocessing_system::recognizeAllRotaryEndCuts(bool interactive)
 
         if (std::any_of(loop.usedItems.begin(), loop.usedItems.end(), [this](const CadItem* item)
         {
-            return item != nullptr && m_processState.stateOrDefault(item->m_entityId)
+            return item != nullptr && m_camJob.processState().stateOrDefault(item->m_entityId)
                 .overrideData.boundaryRole != cadcam::planning::BoundaryRole::None;
         }))
         {
@@ -743,13 +743,13 @@ bool Gcode_postprocessing_system::recognizeAllRotaryEndCuts(bool interactive)
             BoundaryPerformanceTimer stateTimer
                 (m_boundaryAssignmentPerformanceReport != nullptr
                     ? &m_boundaryAssignmentPerformanceReport->processStateUpdateMs : nullptr);
-            m_processState.beginBatch();
+            m_camJob.processState().beginBatch();
             for (CadItem* item : recognizedItems)
             {
-                if (item != nullptr) m_processState.setBoundary
+                if (item != nullptr) m_camJob.processState().setBoundary
                     (item->m_entityId, cadcam::planning::BoundaryRole::Break, nextBoundaryId);
             }
-            m_processState.endBatch();
+            m_camJob.processState().endBatch();
         }
 
         ++nextBoundaryId;
@@ -794,7 +794,7 @@ bool Gcode_postprocessing_system::clearSelectedRotaryEndCutAssignments()
     {
         if (item != nullptr)
         {
-            const auto state = m_processState.stateOrDefault(item->m_entityId);
+            const auto state = m_camJob.processState().stateOrDefault(item->m_entityId);
             if (state.overrideData.boundaryRole != cadcam::planning::BoundaryRole::None
                 && state.overrideData.boundaryPairId >= 0)
                 pairIds.insert(state.overrideData.boundaryPairId);
@@ -813,22 +813,22 @@ bool Gcode_postprocessing_system::clearSelectedRotaryEndCutAssignments()
         BoundaryPerformanceTimer stateTimer
             (m_boundaryAssignmentPerformanceReport != nullptr
                 ? &m_boundaryAssignmentPerformanceReport->processStateUpdateMs : nullptr);
-        m_processState.beginBatch();
+        m_camJob.processState().beginBatch();
         for (const std::unique_ptr<CadItem>& entity : m_document.m_entities)
         {
             if (entity == nullptr)
             {
                 continue;
             }
-            const auto state = m_processState.stateOrDefault(entity->m_entityId);
+            const auto state = m_camJob.processState().stateOrDefault(entity->m_entityId);
             if (pairIds.contains(state.overrideData.boundaryPairId))
             {
-                m_processState.setBoundary
+                m_camJob.processState().setBoundary
                     (entity->m_entityId, cadcam::planning::BoundaryRole::None, -1);
                 ++clearedCount;
             }
         }
-        m_processState.endBatch();
+        m_camJob.processState().endBatch();
     }
 
     const QString message = QStringLiteral("已清除 %1 个加工断面边界，共 %2 个图元。")
@@ -857,19 +857,19 @@ bool Gcode_postprocessing_system::clearRotaryEndCutAssignments()
         BoundaryPerformanceTimer stateTimer
             (m_boundaryAssignmentPerformanceReport != nullptr
                 ? &m_boundaryAssignmentPerformanceReport->processStateUpdateMs : nullptr);
-        m_processState.beginBatch();
+        m_camJob.processState().beginBatch();
         for (const std::unique_ptr<CadItem>& entity : m_document.m_entities)
         {
-            if (entity == nullptr || m_processState.stateOrDefault(entity->m_entityId)
+            if (entity == nullptr || m_camJob.processState().stateOrDefault(entity->m_entityId)
                 .overrideData.boundaryRole == cadcam::planning::BoundaryRole::None)
             {
                 continue;
             }
-            m_processState.setBoundary
+            m_camJob.processState().setBoundary
                 (entity->m_entityId, cadcam::planning::BoundaryRole::None, -1);
             ++clearedCount;
         }
-        m_processState.endBatch();
+        m_camJob.processState().endBatch();
     }
 
     if (clearedCount == 0)

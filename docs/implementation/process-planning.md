@@ -160,7 +160,7 @@ Break 断面入口链：
 
 ## 状态所有权
 
-主窗口保存唯一的当前 `ProcessPlan` 和 `ProcessPresentationSnapshot`。
+`CamJob` 保存唯一的当前 `ProcessPlan`，主窗口保存对应的 `ProcessPresentationSnapshot`。
 核心规划器只返回值对象，不持有活动文档或 Viewer。
 计划通过 `contentRevision` 和 `processStateRevision` 绑定生成时的文档与加工状态。
 Viewer 只读取展示快照，不反向修改计划或加工输入。

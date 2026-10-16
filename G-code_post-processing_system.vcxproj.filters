@@ -625,13 +625,13 @@
     <ClCompile Include="src\application\planning\DocumentProcessPlanningAdapter.cpp">
       <Filter>Source Files\application\planning</Filter>
     </ClCompile>
+    <ClCompile Include="src\application\cam\CamJob.cpp">
+      <Filter>Source Files\application\cam</Filter>
+    </ClCompile>
     <ClCompile Include="src\application\process\ProcessStateEditSync.cpp">
       <Filter>Source Files\application\process</Filter>
     </ClCompile>
     <ClCompile Include="src\application\process\DocumentProcessState.cpp">
-      <Filter>Source Files\application\process</Filter>
-    </ClCompile>
-    <ClCompile Include="src\application\process\ProcessStateEditSync.cpp">
       <Filter>Source Files\application\process</Filter>
     </ClCompile>
     <ClCompile Include="src\application\process\ProcessPresentationSnapshot.cpp">
@@ -851,6 +851,9 @@
     </ClInclude>
     <ClInclude Include="include\cad\view\rendering\CadSelectionHandle.h">
       <Filter>Header Files\cad\view\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="include\application\cam\CamJob.h">
+      <Filter>Header Files\application\cam</Filter>
     </ClInclude>
     <ClInclude Include="include\application\process\ProcessStateEditSync.h">
       <Filter>Header Files\application\process</Filter>

@@ -456,12 +456,10 @@ OperationReport Gcode_postprocessing_system::prepareDocumentForGCodeExport
         generationMode == GGenerator::GenerationMode::Mode3D
         ? cadcam::planning::ProcessPlanMode::Rotary4Axis
         : cadcam::planning::ProcessPlanMode::Planar3Axis;
-    const bool hasCurrentProcessPlan = m_currentProcessPlan.has_value()
-        && m_currentProcessPlan->contentRevision == m_document.contentRevision()
-        && m_currentProcessPlan->processStateRevision == m_processState.revision()
-        && m_currentProcessPlan->mode == requiredPlanMode;
+    const bool hasCurrentProcessPlan = m_camJob.isProcessPlanCurrent(m_document.contentRevision())
+        && m_camJob.processPlan()->mode == requiredPlanMode;
     const int excludedCount = hasCurrentProcessPlan
-        ? static_cast<int>(m_currentProcessPlan->exclusions.size()) : 0;
+        ? static_cast<int>(m_camJob.processPlan()->exclusions.size()) : 0;
 
     if (excludedCount > 0)
     {
@@ -479,7 +477,7 @@ OperationReport Gcode_postprocessing_system::prepareDocumentForGCodeExport
     }
 
     const bool hasProcessableEntity = hasCurrentProcessPlan
-        ? !m_currentProcessPlan->assignments.empty()
+        ? !m_camJob.processPlan()->assignments.empty()
         : std::any_of
         (
             m_document.m_entities.begin(),
@@ -591,14 +589,14 @@ bool Gcode_postprocessing_system::exportGCode
     generator.setDocument(&m_document);
     generator.setProfile(&m_activeProfile);
     generator.setGenerationMode(generationMode);
-    generator.setProcessState(&m_processState);
+    generator.setProcessState(&m_camJob.processState());
     generator.setProcessPlan
     (
-        m_currentProcessPlan.has_value() ? &*m_currentProcessPlan : nullptr
+        m_camJob.hasProcessPlan() ? &*m_camJob.processPlan() : nullptr
     );
     generator.setTubeSectionModel(m_rotaryTubeSectionModel.coreModel);
     generator.setCutSurfaceCorrection(rotaryTubeWallThickness(),
-        m_cutSurfacePositiveCorrection, m_cutSurfaceNegativeCorrection);
+        m_camJob.settings().cutSurfacePositiveCorrection, m_camJob.settings().cutSurfaceNegativeCorrection);
     generator.setRotaryTubeCenter
     (
         m_rotaryTubeSectionModel.centerY,
@@ -806,7 +804,7 @@ bool Gcode_postprocessing_system::removeDuplicateEntities(bool interactive)
         {
             continue;
         }
-        const auto state = m_processState.stateOrDefault(item->m_entityId);
+        const auto state = m_camJob.processState().stateOrDefault(item->m_entityId);
         if (!state.overrideData.processEnabled) continue;
 
         const QString geometryKey = duplicateGeometryKey(item);

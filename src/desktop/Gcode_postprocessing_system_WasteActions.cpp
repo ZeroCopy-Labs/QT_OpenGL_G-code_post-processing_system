@@ -39,7 +39,7 @@ int Gcode_postprocessing_system::refreshWasteProcessingExclusions()
         [this](const std::unique_ptr<CadItem>& entity)
         {
             if (entity == nullptr) return false;
-            const auto state = m_processState.stateOrDefault(entity->m_entityId);
+            const auto state = m_camJob.processState().stateOrDefault(entity->m_entityId);
             return state.overrideData.boundaryRole != cadcam::planning::BoundaryRole::None
                 && state.overrideData.boundaryPairId >= 0;
         }
@@ -57,7 +57,7 @@ int Gcode_postprocessing_system::refreshWasteProcessingExclusions()
         int excludedCount = 0;
         for (const std::unique_ptr<CadItem>& entity : m_document.m_entities)
         {
-            if (entity != nullptr && m_processState.stateOrDefault(entity->m_entityId)
+            if (entity != nullptr && m_camJob.processState().stateOrDefault(entity->m_entityId)
                 .overrideData.boundaryRole == cadcam::planning::BoundaryRole::Waste)
             {
                 ++excludedCount;
@@ -92,7 +92,7 @@ int Gcode_postprocessing_system::refreshWasteProcessingExclusions
             continue;
         }
 
-        const auto state = m_processState.stateOrDefault(entity->m_entityId);
+        const auto state = m_camJob.processState().stateOrDefault(entity->m_entityId);
 
         if (state.overrideData.boundaryRole == cadcam::planning::BoundaryRole::None
             || state.overrideData.boundaryPairId < 0)
@@ -181,7 +181,7 @@ int Gcode_postprocessing_system::refreshWasteProcessingExclusions
             continue;
         }
 
-        const auto state = m_processState.stateOrDefault(entity->m_entityId);
+        const auto state = m_camJob.processState().stateOrDefault(entity->m_entityId);
         if (state.overrideData.boundaryRole == cadcam::planning::BoundaryRole::Waste)
         {
             ++excludedCount;

@@ -69,7 +69,7 @@ bool Gcode_postprocessing_system::importCadFile(const QString& filePath)
 bool Gcode_postprocessing_system::importDxfFile(const QString& filePath)
 {
     m_editer.clearHistory();
-    m_processState.clear();
+    m_camJob.processState().clear();
     invalidateCurrentProcessPlan();
     if (!m_document.readDxfDocument(filePath))
     {
@@ -82,7 +82,7 @@ bool Gcode_postprocessing_system::importDxfFile(const QString& filePath)
         return false;
     }
     m_rotaryTubeSectionModel = RotaryTubeSectionModel();
-    m_rotaryTubeWallThicknessOverride.reset();
+    m_camJob.settings().rotaryTubeWallThicknessOverride.reset();
     m_currentDocumentPath = ensureDxfSuffix(filePath);
     ui->openGLWidget->setDocument(&m_document);
     ui->openGLWidget->clearSelection();
@@ -215,10 +215,10 @@ bool Gcode_postprocessing_system::importBitmapFile(const QString& filePath)
 
     if (replaceExisting)
     {
-        m_processState.clear();
+        m_camJob.processState().clear();
         invalidateCurrentProcessPlan();
         m_rotaryTubeSectionModel = RotaryTubeSectionModel();
-        m_rotaryTubeWallThicknessOverride.reset();
+        m_camJob.settings().rotaryTubeWallThicknessOverride.reset();
         m_currentDocumentPath.clear();
         ui->openGLWidget->clearSelection();
     }

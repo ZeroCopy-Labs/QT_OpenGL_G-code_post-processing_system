@@ -197,7 +197,7 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan2D
     policy.numericalEpsilon = 1.0e-5;
     const OperationContext context = createOperationContext(QStringLiteral("BuildAndApplyPlanarProcessPlan"));
     ProcessPlanningService service;
-    auto plan = service.buildPlanarPlan(m_document, m_processState, policy, context);
+    auto plan = service.buildPlanarPlan(m_document, m_camJob.processState(), policy, context);
     if (!plan.succeeded() || !plan.value.has_value())
     {
         QString message = QStringLiteral("无法生成三轴加工计划。");
@@ -217,12 +217,12 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan2D
     }
 
     cadcam::planning::ProcessPlan resolvedPlan = std::move(*plan.value);
-    m_processState.setProcessUnitSequence(resolvedPlan.processUnitSequence.units);
-    resolvedPlan.processUnitSequence = m_processState.processUnitSequence();
-    resolvedPlan.processStateRevision = m_processState.revision();
-    m_currentProcessPlan = std::move(resolvedPlan);
+    m_camJob.processState().setProcessUnitSequence(resolvedPlan.processUnitSequence.units);
+    resolvedPlan.processUnitSequence = m_camJob.processState().processUnitSequence();
+    resolvedPlan.processStateRevision = m_camJob.processState().revision();
+    m_camJob.setProcessPlan(std::move(resolvedPlan));
     auto presentation = cadcam::process::ProcessPresentationSnapshot::build
-        (*m_currentProcessPlan, context);
+        (*m_camJob.processPlan(), context);
     if (!presentation.succeeded() || !presentation.value.has_value())
     {
         invalidateCurrentProcessPlan();
@@ -234,8 +234,8 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan2D
     ui->openGLWidget->update();
     const QString message = QStringLiteral("%1完成：最近距离排序，共安排 %2 个图元，排除 %3 个图元。%4")
         .arg(commandTitle)
-        .arg(m_currentProcessPlan->assignments.size())
-        .arg(m_currentProcessPlan->exclusions.size())
+        .arg(m_camJob.processPlan()->assignments.size())
+        .arg(m_camJob.processPlan()->exclusions.size())
         .arg(dedupResult.removedCount > 0
             ? QStringLiteral("已自动删除 %1 个重复图元。").arg(dedupResult.removedCount)
             : QString());
@@ -274,7 +274,7 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan3D
     {
         if (entity == nullptr) continue;
         const CadProcessVisualInfo info = buildProcessVisualInfo(entity.get());
-        const auto state = m_processState.stateOrDefault(entity->m_entityId);
+        const auto state = m_camJob.processState().stateOrDefault(entity->m_entityId);
         const bool isBoundary = state.overrideData.boundaryRole != cadcam::planning::BoundaryRole::None
             && state.overrideData.boundaryPairId >= 0;
         if (info.valid || isBoundary) dedupCandidates.push_back(entity.get());
@@ -342,7 +342,7 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan3D
         m_rotaryTubeSectionModel.coreModel;
     ProcessPlanningService service;
     auto planResult = service.buildRotaryPlan
-        (m_document, m_processState, section, policy, context);
+        (m_document, m_camJob.processState(), section, policy, context);
     if (!planResult.succeeded() || !planResult.value.has_value())
     {
         QString message = QStringLiteral("无法生成加工计划。");
@@ -362,12 +362,12 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan3D
     }
 
     cadcam::planning::ProcessPlan resolvedPlan = std::move(*planResult.value);
-    m_processState.setProcessUnitSequence(resolvedPlan.processUnitSequence.units);
-    resolvedPlan.processUnitSequence = m_processState.processUnitSequence();
-    resolvedPlan.processStateRevision = m_processState.revision();
-    m_currentProcessPlan = std::move(resolvedPlan);
+    m_camJob.processState().setProcessUnitSequence(resolvedPlan.processUnitSequence.units);
+    resolvedPlan.processUnitSequence = m_camJob.processState().processUnitSequence();
+    resolvedPlan.processStateRevision = m_camJob.processState().revision();
+    m_camJob.setProcessPlan(std::move(resolvedPlan));
     auto presentation = cadcam::process::ProcessPresentationSnapshot::build
-        (*m_currentProcessPlan, context);
+        (*m_camJob.processPlan(), context);
     if (!presentation.succeeded() || !presentation.value.has_value())
     {
         invalidateCurrentProcessPlan();
@@ -383,8 +383,8 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan3D
     const QString message = QStringLiteral("%1完成：%2，共安排 %3 个图元，排除 %4 个图元。%5")
         .arg(commandTitle)
         .arg(strategyText)
-        .arg(m_currentProcessPlan->assignments.size())
-        .arg(m_currentProcessPlan->exclusions.size())
+        .arg(m_camJob.processPlan()->assignments.size())
+        .arg(m_camJob.processPlan()->exclusions.size())
         .arg(dedupResult.removedCount > 0
             ? QStringLiteral("已自动删除 %1 个重复图元。").arg(dedupResult.removedCount)
             : QString());

@@ -75,7 +75,7 @@ Rotary4Axis ProcessPlan
 
 ## 状态所有权
 
-`ProcessPlan` 由主窗口持有，`MachineTrajectory` 是导出调用中的临时值对象。
+`ProcessPlan` 由 `CamJob` 持有，`MachineTrajectory` 是导出调用中的临时值对象。
 轨迹保存计划的文档 revision 和加工状态 revision，供 NC 阶段继续校验。
 四轴配置由当前 `GProfile` 提供，构建时复制到 `RotaryMachinePolicy`。
 方管截面由主窗口提供；业务状态按用户中心、自动中心、`(0,0)` 解析，并将有效中心同步到核心模型。

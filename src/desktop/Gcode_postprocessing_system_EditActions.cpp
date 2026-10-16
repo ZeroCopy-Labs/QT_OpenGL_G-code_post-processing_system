@@ -20,20 +20,20 @@ bool Gcode_postprocessing_system::toggleSelectedEntityReverse()
     }
 
     int updatedCount = 0;
-    m_processState.beginBatch();
+    m_camJob.processState().beginBatch();
     for (CadItem* item : selectedItems)
     {
         if (item != nullptr)
         {
-            const auto state = m_processState.stateOrDefault(item->m_entityId);
+            const auto state = m_camJob.processState().stateOrDefault(item->m_entityId);
             const auto direction = state.overrideData.direction
                 == cadcam::process::DirectionPreference::Reverse
                 ? cadcam::process::DirectionPreference::Forward
                 : cadcam::process::DirectionPreference::Reverse;
-            if (m_processState.setDirection(item->m_entityId, direction)) ++updatedCount;
+            if (m_camJob.processState().setDirection(item->m_entityId, direction)) ++updatedCount;
         }
     }
-    m_processState.endBatch();
+    m_camJob.processState().endBatch();
 
     if (updatedCount <= 0)
     {

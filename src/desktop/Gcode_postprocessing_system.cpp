@@ -357,12 +357,12 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
         [this](const std::vector<cadcam::geometry::EntityId>& sourceEntityIds)
         {
             return std::make_unique<cadcam::process::ProcessStateEditSync>
-                (m_processState, sourceEntityIds);
+                (m_camJob.processState(), sourceEntityIds);
         }
     );
     ui->openGLWidget->setEditer(&m_editer);
     ui->openGLWidget->setDocument(&m_document);
-    ui->openGLWidget->setDocumentProcessState(&m_processState);
+    ui->openGLWidget->setDocumentProcessState(&m_camJob.processState());
     ui->openGLWidget->setProcessPresentation(nullptr);
     ui->openGLWidget->refreshCommandPrompt();
 
@@ -378,11 +378,11 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
     connect(ui->openGLWidget, &CadViewer::processDirectionToggleRequested, this,
         [this](cadcam::geometry::EntityId processEntityId)
         {
-            const auto state = m_processState.stateOrDefault(processEntityId);
+            const auto state = m_camJob.processState().stateOrDefault(processEntityId);
             const auto direction = state.overrideData.direction == cadcam::process::DirectionPreference::Reverse
                 ? cadcam::process::DirectionPreference::Forward
                 : cadcam::process::DirectionPreference::Reverse;
-            if (m_processState.setDirection(processEntityId, direction))
+            if (m_camJob.processState().setDirection(processEntityId, direction))
             {
                 invalidateCurrentProcessPlan();
                 ui->openGLWidget->appendCommandMessage(QStringLiteral("已更新加工方向偏好，请重新排序。"));
@@ -663,8 +663,8 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
     ui->action_Sort_3D_Smart->setVisible(false);
 
     m_generationPreference = loadGenerationPreference();
-    m_cutSurfacePositiveCorrection = loadCutSurfacePositiveCorrection();
-    m_cutSurfaceNegativeCorrection = loadCutSurfaceNegativeCorrection();
+    m_camJob.settings().cutSurfacePositiveCorrection = loadCutSurfacePositiveCorrection();
+    m_camJob.settings().cutSurfaceNegativeCorrection = loadCutSurfaceNegativeCorrection();
 
     if (m_generationPreference == GCodeGenerationPreference::Force3D && !m_license.allows(AppFeature::FourAxisExport))
     {
@@ -1900,13 +1900,13 @@ void Gcode_postprocessing_system::initializeMachiningSettingsDock()
     connect(m_machiningSettingsWidget, &MachiningSettingsWidget::cutSurfacePositiveCorrectionChanged,
         this, [this](bool enabled)
     {
-        m_cutSurfacePositiveCorrection = enabled;
+        m_camJob.settings().cutSurfacePositiveCorrection = enabled;
         saveCutSurfacePositiveCorrection(enabled);
     });
     connect(m_machiningSettingsWidget, &MachiningSettingsWidget::cutSurfaceNegativeCorrectionChanged,
         this, [this](bool enabled)
     {
-        m_cutSurfaceNegativeCorrection = enabled;
+        m_camJob.settings().cutSurfaceNegativeCorrection = enabled;
         saveCutSurfaceNegativeCorrection(enabled);
     });
     m_machiningSettingsDock->setWidget(m_machiningSettingsWidget);
@@ -2081,7 +2081,7 @@ void Gcode_postprocessing_system::initializeMachiningSettingsDock()
             // 输入框显示三位小数；仅聚焦后离开不应把默认值变成手动覆盖。
             if (wallThickness > 0.0
                 && std::abs(wallThickness - rotaryTubeWallThickness()) < 0.0005) return;
-            m_rotaryTubeWallThicknessOverride = wallThickness > 0.0
+            m_camJob.settings().rotaryTubeWallThicknessOverride = wallThickness > 0.0
                 ? std::optional<double>(wallThickness) : std::nullopt;
             syncMachiningSettingsState();
 
@@ -2118,9 +2118,7 @@ void Gcode_postprocessing_system::initializeToolPanel()
 
     connect(&m_document, &CadDocument::sceneChanged, this, [this]()
     {
-        if (m_currentProcessPlan.has_value()
-            && (m_currentProcessPlan->contentRevision != m_document.contentRevision()
-                || m_currentProcessPlan->processStateRevision != m_processState.revision()))
+        if (m_camJob.hasProcessPlan() && !m_camJob.isProcessPlanCurrent(m_document.contentRevision()))
         {
             invalidateCurrentProcessPlan();
         }
@@ -2587,7 +2585,7 @@ void Gcode_postprocessing_system::syncToolPanelState()
 
 double Gcode_postprocessing_system::rotaryTubeWallThickness() const
 {
-    return m_rotaryTubeWallThicknessOverride.value_or
+    return m_camJob.settings().rotaryTubeWallThicknessOverride.value_or
         (m_rotaryTubeSectionModel.valid ? m_rotaryTubeSectionModel.cornerRadius : 0.0);
 }
 
@@ -2644,8 +2642,8 @@ void Gcode_postprocessing_system::syncMachiningSettingsState()
         (rotaryTubeWallThickness());
     m_machiningSettingsWidget->setCutSurfaceCorrectionOptions
     (
-        m_cutSurfacePositiveCorrection,
-        m_cutSurfaceNegativeCorrection
+        m_camJob.settings().cutSurfacePositiveCorrection,
+        m_camJob.settings().cutSurfaceNegativeCorrection
     );
     const std::optional<cadcam::machining::TubeSectionModel> section =
         m_rotaryTubeSectionModel.valid
@@ -2666,7 +2664,7 @@ void Gcode_postprocessing_system::syncMachiningSettingsState()
             continue;
         }
 
-        const auto state = m_processState.stateOrDefault(entity->m_entityId);
+        const auto state = m_camJob.processState().stateOrDefault(entity->m_entityId);
         if (state.overrideData.boundaryRole == cadcam::planning::BoundaryRole::Break
             && state.overrideData.boundaryPairId >= 0)
         {

@@ -69,11 +69,11 @@ ProcessPlan 中的加工单元顺序
 
 ## 状态所有权
 
-主窗口拥有当前 `CadDocument`、`DocumentProcessState`、方管截面、当前计划和展示快照。
+主窗口拥有当前 `CadDocument`、`CamJob`、方管截面和展示快照：加工状态、加工设置和当前加工计划由 `CamJob` 统一持有。
 `DocumentProcessState` 以 `CadItem::m_entityId` 为键，不使用 Viewer 的对象地址键。
 当前生产代码将加工启用、方向、起点和 Break/Waste 角色按图元身份保存。
 方管截面没有存入 `DocumentProcessState`，由主窗口中的独立模型保存。
-当前计划和展示快照属于派生结果，可随时根据上下文重建。
+当前计划和展示快照属于派生结果，可随时根据上下文重建；计划由 `CamJob` 持有，展示快照仍由主窗口持有并交给 Viewer。
 
 `DocumentProcessState` 保存唯一 `ProcessUnitSequence`。顺序属于加工单元序列，不属于成员图元；单元身份只使用稳定 `EntityId` 形成的 `ProcessUnitKey`。
 
@@ -121,9 +121,11 @@ ProcessPlan 中的加工单元顺序
 
 - `include/application/process/DocumentProcessState.h`：定义逐图元加工输入、分析状态和 revision 接口。
 - `src/application/process/DocumentProcessState.cpp`：实现状态去默认值、批处理和 revision 推进。
+- `include/application/cam/CamJob.h`：CAM 任务聚合边界，拥有加工状态、加工设置和当前加工计划及其生命周期操作。
+- `src/application/cam/CamJob.cpp`：实现加工计划的设置、判断和失效。
 - `include/application/process/ProcessStateEditSync.h`：CAD 删除/替换时在应用层同步加工状态和加工单元序列的编辑伴随器。
 - `include/cad/editing/CadEditCompanion.h`：CAD 层业务无关的编辑伴随接口，只转交图元身份。
-- `include/desktop/Gcode_postprocessing_system.h`：拥有当前文档、截面、加工状态、计划和展示快照。
+- `include/desktop/Gcode_postprocessing_system.h`：拥有当前文档、`CamJob`、方管截面和展示快照。
 - `src/desktop/Gcode_postprocessing_system_FileActions.cpp`：处理导入时的状态清理和自动后处理。
 - `src/desktop/Gcode_postprocessing_system_BoundaryActions.cpp`：写入断面与端面相关的加工状态。
 - `src/desktop/Gcode_postprocessing_system_ProcessUnitActions.cpp`：写入加工单元序列与遍历覆盖，并使派生计划失效。
