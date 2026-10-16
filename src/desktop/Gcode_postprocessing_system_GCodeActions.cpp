@@ -6,7 +6,7 @@
 #include "application/export/GCodeFileWriter.h"
 
 #include "cad/items/CadItem.h"
-#include "cad/view/rendering/CadProcessVisualUtils.h"
+#include "cad/view/rendering/CadSelectionVisualUtils.h"
 #include "application/messaging/DebugMessageSink.h"
 #include "application/messaging/UserInterfaceMessageSink.h"
 

@@ -14,7 +14,10 @@
 #include "cad/view/rendering/CadEntityRenderer.h"
 #include "cad/view/interaction/CadInteractionConstants.h"
 #include "cad/items/CadItem.h"
-#include "cad/view/rendering/CadProcessVisualUtils.h"
+#include "cad/view/rendering/CadRenderLayer.h"
+#include "cad/view/rendering/CadSelectionVisualUtils.h"
+#include "cad/view/rendering/CamRenderLayer.h"
+#include "cad/view/rendering/SelectionRenderLayer.h"
 #include "cad/view/rendering/CadPreviewBuilder.h"
 #include "cad/view/transform/CadViewTransform.h"
 #include "cad/view/CadViewerUtils.h"
@@ -77,6 +80,25 @@ CadViewer::CadViewer(QWidget* parent)
     m_graphicsCoordinator.setTheme(m_theme);
     m_snapComputationTimer.start();
 
+    // 共享视口内的三个渲染层：CAD 几何、CAD 选择、CAM 可视化。
+    // Phase 8: SimulationRenderLayer 可与这三层并列挂到同一视口。
+    m_cadRenderLayer = std::make_unique<CadRenderLayer>();
+    m_selectionRenderLayer = std::make_unique<SelectionRenderLayer>();
+    m_camRenderLayer = std::make_unique<CamRenderLayer>();
+    // CAM 层只产生请求，选择与消息由共享视口执行。
+    connect(m_camRenderLayer.get(), &CamRenderLayer::selectionRequested, this,
+        [this](QSet<RenderEntityKey> renderKeys, RenderEntityKey preferredRenderKey, bool)
+        {
+            setSelectedRenderKeys(renderKeys, preferredRenderKey);
+            update();
+        });
+    connect(m_camRenderLayer.get(), &CamRenderLayer::commandMessageRequested, this,
+        [this](const QString& message)
+        {
+            appendCommandMessage(message);
+            refreshCommandPrompt();
+        });
+
     m_overlappedHandlePopupTimer.setSingleShot(true);
     connect
     (
@@ -134,7 +156,8 @@ void CadViewer::setDocument(CadDocument* document)
     invalidateSnapCache();
     // 清除选中实体
     setSelectedRenderKey({});
-    m_hoveredProcessUnitKey.reset();
+    m_camRenderLayer->setSceneEntities(document != nullptr ? &document->m_entities : nullptr);
+    m_camRenderLayer->clearHover();
     resetOverlappedHandleHoverState();
     hideSelectionWindowPreview();
 
@@ -159,22 +182,27 @@ void CadViewer::setEditer(CadEditer* editer)
     m_controller.setEditer(editer);
 }
 
-void CadViewer::setDocumentProcessState
-(
-    const cadcam::process::DocumentProcessState* processState
-)
+CamRenderLayer* CadViewer::camRenderLayer() const
 {
-    m_processState = processState;
-    update();
+    return m_camRenderLayer.get();
 }
 
-void CadViewer::setProcessPresentation
-(
-    const cadcam::process::ProcessPresentationSnapshot* presentation
-)
+ViewportRenderContext CadViewer::makeViewportRenderContext() const
 {
-    m_processPresentation = presentation;
-    update();
+    ViewportRenderContext context;
+    context.worldToScreen = [this](const QVector3D& worldPos) { return worldToScreen(worldPos); };
+    context.viewProjection = m_camera.viewProjectionMatrix(aspectRatio());
+    context.viewForward = m_camera.forwardDirection();
+    context.viewRight = m_camera.rightDirection();
+    context.pixelToWorldScale = pixelToWorldScale();
+    context.viewportWidth = width();
+    context.viewportHeight = height();
+    context.overlayFont = font();
+    context.theme = m_theme;
+    context.interactionIdle = interactionMode() == ViewInteractionMode::Idle;
+    context.primarySelectionKey = m_selectedRenderKey;
+    context.xlineHandleWorldLength = xlineHandleWorldLength();
+    return context;
 }
 
 void CadViewer::setDefaultDrawingProperties(const QString& layerName, const QColor& color, int colorIndex)
@@ -278,70 +306,6 @@ void CadViewer::setTheme(const AppThemeColors& theme)
     update();
 }
 
-void CadViewer::setProcessVisualsVisible(bool visible)
-{
-    if (m_processVisualsVisible == visible)
-    {
-        return;
-    }
-
-    m_processVisualsVisible = visible;
-    m_hoveredProcessUnitKey.reset();
-    update();
-}
-
-void CadViewer::setProcessDirectionVisible(bool visible)
-{
-    m_processDirectionVisible = visible;
-    update();
-}
-
-void CadViewer::setProcessOrderVisible(bool visible)
-{
-    m_processOrderVisible = visible;
-    m_hoveredProcessUnitKey.reset();
-    update();
-}
-
-void CadViewer::setRotaryEndCutsVisible(bool visible)
-{
-    m_rotaryEndCutsVisible = visible;
-    update();
-}
-
-void CadViewer::setRotaryLaserWallImpactVisible(bool visible)
-{
-    m_rotaryLaserWallImpactVisible = visible;
-    update();
-}
-
-void CadViewer::setRotaryExpectedSurfaceVisible(bool visible)
-{
-    m_rotaryExpectedSurfaceVisible = visible;
-    update();
-}
-
-void CadViewer::setRotaryEndCutPreview
-(
-    const std::optional<cadcam::machining::TubeSectionModel>& section,
-    double wallThickness,
-    const cadcam::machine::RotaryMachinePolicy& machinePolicy
-)
-{
-    m_rotaryEndCutPreviewSection = section;
-    m_rotaryTubeWallThickness =
-        std::isfinite(wallThickness) && wallThickness > 0.0
-            ? wallThickness : 0.0;
-    m_rotaryEndCutPreviewMachinePolicy = machinePolicy;
-    rebuildRotaryEndCutPreviewPaths();
-    update();
-}
-
-void CadViewer::setExcludedEntitiesDimmed(bool dimmed)
-{
-    m_excludedEntitiesDimmed = dimmed;
-    update();
-}
 
 void CadViewer::setBackgroundGridVisible(bool visible)
 {
@@ -627,8 +591,7 @@ void CadViewer::paintGL()
     renderOrbitMarker(viewProjection);
     renderScreenCrosshair();
     renderEntitySelectionOverlays();
-    renderProcessOrderLabels();
-    renderRotaryEndCutLabels();
+    renderCamScreenOverlays();
     renderSelectionWindowPreview();
     renderOverlappedHandlePopup();
     renderDynamicInputOverlay();
@@ -710,18 +673,18 @@ void CadViewer::renderEntities(const QMatrix4x4& viewProjection)
         return;
     }
 
-    // 渲染实体
-    CadEntityRenderer::renderEntities
-    (
-        m_graphicsCoordinator.generalShader(),
-        viewProjection,
-        scene->m_entities,
-        m_sceneCoordinator.renderCache(),
-        m_selectedRenderKey,
-        m_theme,
-        m_processVisualsVisible && m_excludedEntitiesDimmed,
-        m_processPresentation
-    );
+    // CAD 几何由 CAD 渲染层绘制；被排除图元的显示覆盖由 CAM 层计算后传入。
+    const ViewportRenderContext context = makeViewportRenderContext();
+    const CadRenderOverrideMap overrides = m_camRenderLayer->buildRenderOverrides(context);
+    CadRenderLayer::Frame frame;
+    frame.shader = &m_graphicsCoordinator.generalShader();
+    frame.viewProjection = viewProjection;
+    frame.entities = &scene->m_entities;
+    frame.renderCache = &m_sceneCoordinator.renderCache();
+    frame.selectedRenderKey = m_selectedRenderKey;
+    frame.theme = m_theme;
+    frame.overrides = &overrides;
+    m_cadRenderLayer->render(frame);
 }
 
 // 绘制轨道旋转中心标记。
@@ -757,18 +720,18 @@ void CadViewer::renderTransientPrimitives(const QMatrix4x4& viewProjection)
         return;
     }
 
-    std::vector<TransientPrimitive> processPrimitives = buildRotaryEndCutPrimitives();
-    const std::vector<TransientPrimitive> processDirectionPrimitives = buildProcessArrowPrimitives();
+    const ViewportRenderContext context = makeViewportRenderContext();
+    // CAM 可视化（方向箭头、旋转端面与预览走线）由 CAM 层提供。
+    std::vector<TransientPrimitive> primitives = m_camRenderLayer->buildOverlayPrimitives(context);
     const std::vector<TransientPrimitive> selectedHandlePrimitives = buildSelectedEntityHandlePrimitives();
     const std::vector<TransientPrimitive> snapHighlightPrimitives = buildSnapHighlightPrimitives();
     // 构建命令预览图元
     const std::vector<TransientPrimitive> commandPrimitives = buildTransientPrimitives();
-    processPrimitives.insert(processPrimitives.end(), processDirectionPrimitives.begin(), processDirectionPrimitives.end());
-    processPrimitives.insert(processPrimitives.end(), selectedHandlePrimitives.begin(), selectedHandlePrimitives.end());
-    processPrimitives.insert(processPrimitives.end(), snapHighlightPrimitives.begin(), snapHighlightPrimitives.end());
-    processPrimitives.insert(processPrimitives.end(), commandPrimitives.begin(), commandPrimitives.end());
+    primitives.insert(primitives.end(), selectedHandlePrimitives.begin(), selectedHandlePrimitives.end());
+    primitives.insert(primitives.end(), snapHighlightPrimitives.begin(), snapHighlightPrimitives.end());
+    primitives.insert(primitives.end(), commandPrimitives.begin(), commandPrimitives.end());
 
-    if (processPrimitives.empty())
+    if (primitives.empty())
     {
         return;
     }
@@ -777,7 +740,7 @@ void CadViewer::renderTransientPrimitives(const QMatrix4x4& viewProjection)
     m_graphicsCoordinator.renderTransientPrimitives
     (
         viewProjection,
-        processPrimitives,
+        primitives,
         {}
     );
 }
@@ -804,11 +767,14 @@ void CadViewer::renderScreenCrosshair()
 void CadViewer::handleDocumentSceneChanged()
 {
     invalidateSnapCache();
-    m_hoveredProcessUnitKey.reset();
+    m_camRenderLayer->clearHover();
     // 标记缓冲脏
     m_sceneCoordinator.markBuffersDirty();
     // 刷新场景边界
     m_sceneCoordinator.refreshBounds();
+    // 文档几何变化后重新绑定实体，CAM 预览随之下次重算。
+    CadDocument* scene = m_sceneCoordinator.document();
+    m_camRenderLayer->setSceneEntities(scene != nullptr ? &scene->m_entities : nullptr);
 
     // 场景变化后重算选中集合，自动剔除已失效实体。
     setSelectedRenderKeys(m_selectedRenderKeys, m_selectedRenderKey);
@@ -821,8 +787,6 @@ void CadViewer::handleDocumentSceneChanged()
     {
         m_windowPreviewRenderKeys.clear();
     }
-
-    rebuildRotaryEndCutPreviewPaths();
 
     // 如果图形协调器已初始化，则重建缓冲
     if (m_graphicsCoordinator.isInitialized())

@@ -5,7 +5,8 @@
 #include "cad/document/CadDocument.h"
 #include "cad/items/CadItem.h"
 #include "cad/geometry/CadOcsGeometry.h"
-#include "cad/view/rendering/CadProcessVisualUtils.h"
+#include "cad/view/rendering/CadSelectionVisualUtils.h"
+#include "cad/view/rendering/SelectionRenderLayer.h"
 
 #include <algorithm>
 #include <cmath>
@@ -704,32 +705,10 @@ std::vector<TransientPrimitive> CadViewer::buildSnapHighlightPrimitives() const
         return {};
     }
 
-    const QColor outerColor = objectSnap ? m_theme.selectedControlPointColor : m_theme.accentColor;
-    const QColor innerColor = m_theme.viewerBackgroundColor;
-
-    TransientPrimitive outerPoint;
-    outerPoint.primitiveType = GL_POINTS;
-    outerPoint.color =
-    {
-        static_cast<float>(outerColor.redF()),
-        static_cast<float>(outerColor.greenF()),
-        static_cast<float>(outerColor.blueF())
-    };
-    outerPoint.pointSize = objectSnap ? 15.0f : 13.0f;
-    outerPoint.roundPoint = true;
-    outerPoint.vertices = { snappedPosition };
-
-    TransientPrimitive innerPoint;
-    innerPoint.primitiveType = GL_POINTS;
-    innerPoint.color =
-    {
-        static_cast<float>(innerColor.redF()),
-        static_cast<float>(innerColor.greenF()),
-        static_cast<float>(innerColor.blueF())
-    };
-    innerPoint.pointSize = objectSnap ? 7.0f : 5.5f;
-    innerPoint.roundPoint = true;
-    innerPoint.vertices = { snappedPosition };
-
-    return { outerPoint, innerPoint };
+    return m_selectionRenderLayer->buildSnapHighlightPrimitives
+    (
+        makeViewportRenderContext(),
+        snappedPosition,
+        objectSnap
+    );
 }

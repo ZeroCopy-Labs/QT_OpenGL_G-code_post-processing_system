@@ -1,6 +1,8 @@
 #include "platform/pch.h"
 
 #include "desktop/Gcode_postprocessing_system.h"
+
+#include "cad/view/rendering/CamRenderLayer.h"
 #include "core/diagnostics/SummaryLog.h"
 
 #include "cad/items/CadItem.h"
@@ -8,7 +10,7 @@
 #include "cad/items/CadEllipseItem.h"
 #include "cad/geometry/CadEllipseGeometry.h"
 #include "cad/geometry/CadOcsGeometry.h"
-#include "cad/view/rendering/CadProcessVisualUtils.h"
+#include "cad/view/rendering/CadSelectionVisualUtils.h"
 #include "application/machining/RotaryCutBoundaryAnalyzer.h"
 #include "application/machining/RotaryPathTopology.h"
 #include "application/planning/ProcessPlanningService.h"
@@ -234,8 +236,7 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan2D
         QMessageBox::warning(this, commandTitle, QStringLiteral("加工计划显示快照构建失败。"));
         return false;
     }
-    m_processPresentation = std::move(*presentation.value);
-    ui->openGLWidget->setProcessPresentation(&*m_processPresentation);
+    ui->openGLWidget->camRenderLayer()->setPresentation(std::move(*presentation.value));
     ui->openGLWidget->update();
     const QString message = QStringLiteral("%1完成：最近距离排序，共安排 %2 个图元，排除 %3 个图元。%4")
         .arg(commandTitle)
@@ -377,8 +378,7 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan3D
         QMessageBox::warning(this, commandTitle, QStringLiteral("加工计划显示快照构建失败。"));
         return false;
     }
-    m_processPresentation = std::move(*presentation.value);
-    ui->openGLWidget->setProcessPresentation(&*m_processPresentation);
+    ui->openGLWidget->camRenderLayer()->setPresentation(std::move(*presentation.value));
     ui->openGLWidget->update();
     const QString strategyText = policy.orderingStrategy == cadcam::planning::ProcessOrderingStrategy::LazyRotation
         ? QStringLiteral("懒旋转加工")

@@ -2,6 +2,8 @@
 #include "infrastructure/config/AppSettings.h"
 
 #include "desktop/Gcode_postprocessing_system.h"
+
+#include "cad/view/rendering/CamRenderLayer.h"
 #include "ui/dialogs/CadAppearanceSettingsDialog.h"
 #include "ui/dialogs/CadHelpDialog.h"
 #include "cad/items/CadItem.h"
@@ -365,8 +367,9 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
     );
     ui->openGLWidget->setEditer(&m_editer);
     ui->openGLWidget->setDocument(&m_document);
-    ui->openGLWidget->setDocumentProcessState(&m_camJob.processState());
-    ui->openGLWidget->setProcessPresentation(nullptr);
+    // CAM 层只读加工状态；展示快照由 CAM 层持有，计划失效时清除。
+    ui->openGLWidget->camRenderLayer()->setProcessState(&m_camJob.processState());
+    ui->openGLWidget->camRenderLayer()->clearPresentation();
     ui->openGLWidget->refreshCommandPrompt();
 
     connect(ui->openGLWidget, &CadViewer::hoveredWorldPositionChanged, m_statusPaneWidget, &CadStatusPaneWidget::setWorldPosition);
@@ -391,24 +394,25 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
                 ui->openGLWidget->appendCommandMessage(QStringLiteral("已更新加工方向偏好，请重新排序。"));
             }
         });
+    // 加工单元交互请求由 CAM 可视化层发出，桌面层负责修改加工状态。
     connect
     (
-        ui->openGLWidget,
-        &CadViewer::processUnitMoveToBackRequested,
+        ui->openGLWidget->camRenderLayer(),
+        &CamRenderLayer::processUnitMoveToBackRequested,
         this,
         &Gcode_postprocessing_system::handleProcessUnitMoveToBackRequest
     );
     connect
     (
-        ui->openGLWidget,
-        &CadViewer::processUnitReverseRequested,
+        ui->openGLWidget->camRenderLayer(),
+        &CamRenderLayer::processUnitReverseRequested,
         this,
         &Gcode_postprocessing_system::handleProcessUnitReverseRequest
     );
     connect
     (
-        ui->openGLWidget,
-        &CadViewer::processUnitContextMenuRequested,
+        ui->openGLWidget->camRenderLayer(),
+        &CamRenderLayer::processUnitContextMenuRequested,
         this,
         &Gcode_postprocessing_system::handleProcessUnitEndCutSideRequest
     );
@@ -2099,10 +2103,10 @@ void Gcode_postprocessing_system::initializeMachiningSettingsDock()
     );
 
     connect(m_machiningSettingsWidget, &MachiningSettingsWidget::rotaryLaserWallImpactVisibleChanged,
-        ui->openGLWidget, &CadViewer::setRotaryLaserWallImpactVisible);
+        ui->openGLWidget->camRenderLayer(), &CamRenderLayer::setRotaryLaserWallImpactVisible);
     connect(m_machiningSettingsWidget, &MachiningSettingsWidget::rotaryExpectedSurfaceVisibleChanged,
-        ui->openGLWidget, &CadViewer::setRotaryExpectedSurfaceVisible);
-    connect(ui->openGLWidget, &CadViewer::rotaryEndCutPreviewStatusChanged,
+        ui->openGLWidget->camRenderLayer(), &CamRenderLayer::setRotaryExpectedSurfaceVisible);
+    connect(ui->openGLWidget->camRenderLayer(), &CamRenderLayer::rotaryEndCutPreviewStatusChanged,
         m_machiningSettingsWidget, &MachiningSettingsWidget::setRotaryEndCutPreviewStatus);
 
     syncMachiningSettingsState();
@@ -2316,7 +2320,7 @@ void Gcode_postprocessing_system::initializeCamToolPanel()
 
     const bool processVisualsVisible = loadProcessVisualsVisible();
     m_camToolPanelWidget->setProcessVisualsVisible(processVisualsVisible);
-    ui->openGLWidget->setProcessVisualsVisible(processVisualsVisible);
+    ui->openGLWidget->camRenderLayer()->setVisualsVisible(processVisualsVisible);
     const bool processDirectionVisible = loadDisplayOption(QStringLiteral("processDirection"));
     const bool processOrderVisible = loadDisplayOption(QStringLiteral("processOrder"));
     const bool rotaryEndCutsVisible = loadDisplayOption(QStringLiteral("rotaryEndCuts"));
@@ -2325,10 +2329,10 @@ void Gcode_postprocessing_system::initializeCamToolPanel()
     m_camToolPanelWidget->setProcessOrderVisible(processOrderVisible);
     m_camToolPanelWidget->setRotaryEndCutsVisible(rotaryEndCutsVisible);
     m_camToolPanelWidget->setExcludedEntitiesDimmed(excludedEntitiesDimmed);
-    ui->openGLWidget->setProcessDirectionVisible(processDirectionVisible);
-    ui->openGLWidget->setProcessOrderVisible(processOrderVisible);
-    ui->openGLWidget->setRotaryEndCutsVisible(rotaryEndCutsVisible);
-    ui->openGLWidget->setExcludedEntitiesDimmed(excludedEntitiesDimmed);
+    ui->openGLWidget->camRenderLayer()->setDirectionVisible(processDirectionVisible);
+    ui->openGLWidget->camRenderLayer()->setOrderVisible(processOrderVisible);
+    ui->openGLWidget->camRenderLayer()->setRotaryEndCutsVisible(rotaryEndCutsVisible);
+    ui->openGLWidget->camRenderLayer()->setExcludedEntitiesDimmed(excludedEntitiesDimmed);
 
     m_camToolBar = new QToolBar(QStringLiteral("机加工"), this);
     m_camToolBar->setObjectName(QStringLiteral("camToolBar"));
@@ -2356,28 +2360,28 @@ void Gcode_postprocessing_system::initializeCamToolPanel()
         this,
         [this](bool enabled)
         {
-            ui->openGLWidget->setProcessVisualsVisible(enabled);
+            ui->openGLWidget->camRenderLayer()->setVisualsVisible(enabled);
             saveProcessVisualsVisible(enabled);
         }
     );
     connect(m_camToolPanelWidget, &CamToolPanelWidget::processDirectionVisibleChanged, this, [this](bool enabled)
     {
-        ui->openGLWidget->setProcessDirectionVisible(enabled);
+        ui->openGLWidget->camRenderLayer()->setDirectionVisible(enabled);
         saveDisplayOption(QStringLiteral("processDirection"), enabled);
     });
     connect(m_camToolPanelWidget, &CamToolPanelWidget::processOrderVisibleChanged, this, [this](bool enabled)
     {
-        ui->openGLWidget->setProcessOrderVisible(enabled);
+        ui->openGLWidget->camRenderLayer()->setOrderVisible(enabled);
         saveDisplayOption(QStringLiteral("processOrder"), enabled);
     });
     connect(m_camToolPanelWidget, &CamToolPanelWidget::rotaryEndCutsVisibleChanged, this, [this](bool enabled)
     {
-        ui->openGLWidget->setRotaryEndCutsVisible(enabled);
+        ui->openGLWidget->camRenderLayer()->setRotaryEndCutsVisible(enabled);
         saveDisplayOption(QStringLiteral("rotaryEndCuts"), enabled);
     });
     connect(m_camToolPanelWidget, &CamToolPanelWidget::excludedEntitiesDimmedChanged, this, [this](bool enabled)
     {
-        ui->openGLWidget->setExcludedEntitiesDimmed(enabled);
+        ui->openGLWidget->camRenderLayer()->setExcludedEntitiesDimmed(enabled);
         saveDisplayOption(QStringLiteral("excludedEntitiesDimmed"), enabled);
     });
     connect(m_camToolPanelWidget, &CamToolPanelWidget::sortKeepDirectionRequested, this, [this]() { ui->action_Sort_2D_Assign->trigger(); });
@@ -2513,11 +2517,11 @@ void Gcode_postprocessing_system::applyWorkspaceState()
             m_camProcessVisualsVisible = m_camToolPanelWidget->processVisualsVisible();
         }
 
-        ui->openGLWidget->setProcessVisualsVisible(false);
+        ui->openGLWidget->camRenderLayer()->setVisualsVisible(false);
     }
     else
     {
-        ui->openGLWidget->setProcessVisualsVisible(m_camProcessVisualsVisible);
+        ui->openGLWidget->camRenderLayer()->setVisualsVisible(m_camProcessVisualsVisible);
     }
 
     ui->openGLWidget->refreshCommandPrompt();
@@ -2711,7 +2715,7 @@ void Gcode_postprocessing_system::syncMachiningSettingsState()
     const std::optional<cadcam::machining::TubeSectionModel> section =
         m_rotaryTubeSectionModel.valid
         ? m_rotaryTubeSectionModel.coreModel : std::nullopt;
-    ui->openGLWidget->setRotaryEndCutPreview
+    ui->openGLWidget->camRenderLayer()->setRotaryEndCutPreview
     (
         section,
         rotaryTubeWallThickness(),

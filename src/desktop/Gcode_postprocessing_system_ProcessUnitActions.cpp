@@ -1,6 +1,8 @@
 #include "platform/pch.h"
 
 #include "desktop/Gcode_postprocessing_system.h"
+
+#include "cad/view/rendering/CamRenderLayer.h"
 #include "core/diagnostics/SummaryLog.h"
 
 #include "cad/items/CadItem.h"
@@ -8,7 +10,7 @@
 #include "cad/items/CadEllipseItem.h"
 #include "cad/geometry/CadEllipseGeometry.h"
 #include "cad/geometry/CadOcsGeometry.h"
-#include "cad/view/rendering/CadProcessVisualUtils.h"
+#include "cad/view/rendering/CadSelectionVisualUtils.h"
 #include "application/machining/RotaryCutBoundaryAnalyzer.h"
 #include "application/machining/RotaryPathTopology.h"
 #include "application/planning/ProcessPlanningService.h"
@@ -43,14 +45,15 @@ void Gcode_postprocessing_system::invalidateCurrentProcessPlan()
             (m_boundaryAssignmentPerformanceReport != nullptr
                 ? &m_boundaryAssignmentPerformanceReport->processStateUpdateMs : nullptr);
         m_camJob.invalidateProcessPlan();
-        m_processPresentation.reset();
     }
     if (ui != nullptr && ui->openGLWidget != nullptr)
     {
+        // 计划失效后清除 CAM 展示快照，避免旧的顺序、箭头和排除状态继续显示。
+        ui->openGLWidget->camRenderLayer()->clearPresentation();
         BoundaryPerformanceTimer viewerTimer
             (m_boundaryAssignmentPerformanceReport != nullptr
                 ? &m_boundaryAssignmentPerformanceReport->viewerRefreshMs : nullptr);
-        ui->openGLWidget->setProcessPresentation(nullptr);
+    
         ui->openGLWidget->update();
     }
 }
@@ -114,8 +117,7 @@ bool Gcode_postprocessing_system::applyProcessUnitSequenceToCurrentPlan
     candidatePlan.processStateRevision = m_camJob.processState().revision();
     candidatePresentation.value->processStateRevision = m_camJob.processState().revision();
     m_camJob.setProcessPlan(std::move(candidatePlan));
-    m_processPresentation = std::move(*candidatePresentation.value);
-    ui->openGLWidget->setProcessPresentation(&*m_processPresentation);
+    ui->openGLWidget->camRenderLayer()->setPresentation(std::move(*candidatePresentation.value));
     ui->openGLWidget->update();
     return true;
 }
@@ -184,8 +186,7 @@ bool Gcode_postprocessing_system::applyProcessUnitTraversalToCurrentPlan
     candidatePlan.processStateRevision = m_camJob.processState().revision();
     candidatePresentation.value->processStateRevision = m_camJob.processState().revision();
     m_camJob.setProcessPlan(std::move(candidatePlan));
-    m_processPresentation = std::move(*candidatePresentation.value);
-    ui->openGLWidget->setProcessPresentation(&*m_processPresentation);
+    ui->openGLWidget->camRenderLayer()->setPresentation(std::move(*candidatePresentation.value));
     ui->openGLWidget->update();
     return true;
 }

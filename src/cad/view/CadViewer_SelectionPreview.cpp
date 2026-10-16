@@ -7,6 +7,8 @@
 #include "cad/view/interaction/CadEntityPicker.h"
 #include "cad/items/CadItem.h"
 #include "cad/view/CadViewerUtils.h"
+#include "cad/view/rendering/CamRenderLayer.h"
+#include "cad/view/rendering/SelectionRenderLayer.h"
 
 #include <QPainter>
 #include <QPen>
@@ -70,10 +72,14 @@ void CadViewer::updateSelectionWindowPreviewCandidates()
         }
     }
 
-    if (m_selectionWindowPreview.target == WindowSelectionTarget::ProcessUnit)
+    // 加工单元预览扩展同样由 CAM 可视化层完成。
+    if (m_selectionWindowPreview.processUnitSelection)
     {
-        m_windowPreviewRenderKeys =
-            expandRenderKeysToProcessUnits(m_windowPreviewRenderKeys).expandedRenderKeys;
+        m_windowPreviewRenderKeys = m_camRenderLayer->expandRenderKeysToProcessUnits
+        (
+            makeViewportRenderContext(),
+            m_windowPreviewRenderKeys
+        ).expandedRenderKeys;
     }
 }
 
@@ -91,99 +97,26 @@ void CadViewer::renderEntitySelectionOverlays()
         return;
     }
 
-    const QMatrix4x4 viewProjection = m_camera.viewProjectionMatrix(aspectRatio());
     QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing, true);
+    m_selectionRenderLayer->renderSelectionOverlays
+    (
+        painter,
+        makeViewportRenderContext(),
+        scene->m_entities,
+        m_selectedRenderKeys,
+        m_windowPreviewRenderKeys
+    );
+}
 
-    for (const std::unique_ptr<CadItem>& entity : scene->m_entities)
+void CadViewer::renderCamScreenOverlays()
+{
+    if (interactionMode() != ViewInteractionMode::Idle)
     {
-        if (entity == nullptr)
-        {
-            continue;
-        }
-
-        const RenderEntityKey renderKey = CadViewerUtils::toRenderEntityKey(entity.get());
-        const bool committedSelected = m_selectedRenderKeys.contains(renderKey);
-        const bool previewSelected = m_windowPreviewRenderKeys.contains(renderKey);
-
-        if (!committedSelected && !previewSelected)
-        {
-            continue;
-        }
-
-        const QVector<QVector3D>& worldVertices = entity->m_geometry.vertices;
-
-        if (worldVertices.isEmpty())
-        {
-            continue;
-        }
-
-        QPolygonF projectedPolyline;
-        projectedPolyline.reserve(worldVertices.size());
-        bool validProjection = true;
-
-        for (const QVector3D& worldVertex : worldVertices)
-        {
-            const QPointF screenPoint = CadViewerUtils::projectToScreen
-            (
-                worldVertex,
-                viewProjection,
-                m_viewportWidth,
-                m_viewportHeight
-            );
-
-            if (!qIsFinite(screenPoint.x()) || !qIsFinite(screenPoint.y()))
-            {
-                validProjection = false;
-                break;
-            }
-
-            projectedPolyline << screenPoint;
-        }
-
-        if (!validProjection || projectedPolyline.isEmpty())
-        {
-            continue;
-        }
-
-        const QColor haloColor = committedSelected
-            ? QColor(60, 174, 255, 48)
-            : (m_theme.dark ? QColor(255, 255, 255, 52) : QColor(42, 78, 104, 48));
-        const QColor glowColor = committedSelected
-            ? QColor(76, 184, 255, 105)
-            : QColor(255, 255, 255, 125);
-        const QColor coreColor = committedSelected
-            ? QColor(105, 202, 255, 195)
-            : QColor(255, 255, 255, 235);
-
-        QPen haloPen(haloColor, 7.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-        QPen glowPen(glowColor, 3.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-        QPen corePen(coreColor, 1.25, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-
-        painter.setBrush(Qt::NoBrush);
-
-        if (projectedPolyline.size() == 1)
-        {
-            const QPointF center = projectedPolyline.front();
-            painter.setPen(haloPen);
-            painter.drawEllipse(center, 8.0, 8.0);
-            painter.setPen(glowPen);
-            painter.drawEllipse(center, 6.0, 6.0);
-            painter.setPen(corePen);
-            painter.drawEllipse(center, 4.0, 4.0);
-        }
-        else
-        {
-            painter.setPen(haloPen);
-            painter.drawPolyline(projectedPolyline);
-
-            painter.setPen(glowPen);
-            painter.drawPolyline(projectedPolyline);
-
-            painter.setPen(corePen);
-            painter.drawPolyline(projectedPolyline);
-        }
+        return;
     }
+
+    QPainter painter(this);
+    m_camRenderLayer->paintScreenOverlays(painter, makeViewportRenderContext());
 }
 
 void CadViewer::renderSelectionWindowPreview()
@@ -204,21 +137,11 @@ void CadViewer::renderSelectionWindowPreview()
         return;
     }
 
-    const bool crossingSelection = m_selectionWindowPreview.crossingSelection;
-    const QColor borderColor = crossingSelection
-        ? QColor(66, 205, 104, 220)
-        : QColor(74, 152, 250, 220);
-    const QColor fillColor = crossingSelection
-        ? QColor(66, 205, 104, 42)
-        : QColor(74, 152, 250, 42);
-
     QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing, false);
-
-    QPen borderPen(borderColor, 1.0, Qt::DashLine);
-    borderPen.setDashPattern({ 7.0, 4.0 });
-
-    painter.setPen(borderPen);
-    painter.setBrush(fillColor);
-    painter.drawRect(selectionRect);
+    m_selectionRenderLayer->renderSelectionWindow
+    (
+        painter,
+        selectionRect,
+        m_selectionWindowPreview.crossingSelection
+    );
 }

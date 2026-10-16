@@ -3,13 +3,12 @@
 #include <QVector>
 #include <QVector3D>
 
-#include "application/process/DocumentProcessState.h"
 #include "application/process/ProcessPresentationSnapshot.h"
-#include "cad/view/rendering/CadSelectionHandle.h"
 
 class CadItem;
 
-struct CadProcessVisualInfo
+// CAM 可视化的几何信息：加工顺序、方向、起点/终点与标签锚点。
+struct CamProcessVisualInfo
 {
     bool valid = false;
     bool closedPath = false;
@@ -23,24 +22,26 @@ struct CadProcessVisualInfo
     QVector3D labelAnchor;
 };
 
-enum class CadProcessExclusionVisual
+// 加工展示中的排除可视化状态。
+enum class CamProcessExclusionVisual
 {
     None,
     PlannedExclusion
 };
 
+// 该图元是否属于可生成加工可视化的几何类型。
 bool isProcessVisualizable(const CadItem* item);
 
-CadProcessExclusionVisual resolveProcessExclusionVisual
+// 图元在加工展示快照中是否被排除。
+CamProcessExclusionVisual resolveCamProcessExclusionVisual
 (
     const CadItem* item,
     const cadcam::process::ProcessPresentationSnapshot* presentation
 );
 
-CadProcessVisualInfo buildProcessVisualInfo
+// 由 CAD 几何和加工展示条目推导方向可视化信息。
+CamProcessVisualInfo buildCamProcessVisualInfo
 (
     const CadItem* item,
     const cadcam::process::ProcessPresentationEntry* presentation = nullptr
 );
-
-QVector<CadSelectionHandleInfo> buildSelectionHandleInfo(const CadItem* item, float xlineHandleLength = 50.0f);

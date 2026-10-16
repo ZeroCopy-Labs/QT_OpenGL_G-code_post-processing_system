@@ -1,10 +1,11 @@
-﻿// 声明 CadRenderTypes 模块，对外暴露当前组件的核心类型、接口和协作边界。
+// 声明 CadRenderTypes 模块，对外暴露当前组件的核心类型、接口和协作边界。
 // 渲染数据类型模块，定义顶点、缓存和 transient 图元等核心结构。
 #pragma once
 
 #include <cstdint>
 #include <functional>
 #include <type_traits>
+#include <unordered_map>
 
 #include <QOpenGLBuffer>
 #include <QOpenGLVertexArrayObject>
@@ -98,3 +99,15 @@ struct TransientPrimitive
     float pointSize = 1.0f;
     bool roundPoint = false;
 };
+
+// 中立的实体渲染覆盖：由上层（例如 CAM 可视化层）计算最终显示参数，
+// CAD 渲染层只执行“该实体用什么颜色和透明度绘制”，不解释覆盖原因。
+struct CadRenderOverride
+{
+    bool hasColor = false;
+    QVector3D color = { 1.0f, 1.0f, 1.0f };
+    float opacity = 1.0f;
+};
+
+using CadRenderOverrideMap
+    = std::unordered_map<RenderEntityKey, CadRenderOverride, RenderEntityKeyHash>;

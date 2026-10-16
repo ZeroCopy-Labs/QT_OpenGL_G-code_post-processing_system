@@ -3,6 +3,8 @@
 
 #include "cad/view/CadViewer.h"
 
+#include "cad/view/rendering/CamRenderLayer.h"
+
 #include <QMimeData>
 #include <QUrl>
 
@@ -47,7 +49,8 @@ void CadViewer::mousePressEvent(QMouseEvent* event)
     }
 
     if (event->button() == Qt::LeftButton
-        && handleProcessOrderLabelClick(event->pos(), event->modifiers()))
+        && m_camRenderLayer->handleClick
+            (makeViewportRenderContext(), event->pos(), event->modifiers()))
     {
         event->accept();
         updateHoveredWorldPosition(event->pos());
@@ -57,8 +60,8 @@ void CadViewer::mousePressEvent(QMouseEvent* event)
     }
 
     if (event->button() == Qt::RightButton
-        && handleProcessUnitContextMenuPress
-            (event->pos(), event->globalPosition().toPoint()))
+        && m_camRenderLayer->handleContextMenuPress
+            (makeViewportRenderContext(), event->pos(), event->globalPosition().toPoint()))
     {
         event->accept();
         updateHoveredWorldPosition(event->pos());
@@ -101,7 +104,7 @@ void CadViewer::mouseDoubleClickEvent(QMouseEvent* event)
     }
 
     if (event->button() == Qt::LeftButton
-        && handleProcessUnitDirectionDoubleClick(event->pos()))
+        && m_camRenderLayer->handleDoubleClick(makeViewportRenderContext(), event->pos()))
     {
         event->accept();
         updateHoveredWorldPosition(event->pos());
@@ -122,7 +125,7 @@ void CadViewer::mouseMoveEvent(QMouseEvent* event)
 
     if (m_hoveredViewCubeFace != ViewCubeFace::None)
     {
-        m_hoveredProcessUnitKey.reset();
+        m_camRenderLayer->clearHover();
         setCursor(Qt::ArrowCursor);
         m_showCrosshairOverlay = false;
         resetOverlappedHandleHoverState();
@@ -138,13 +141,13 @@ void CadViewer::mouseMoveEvent(QMouseEvent* event)
 
     if (interactionMode() == ViewInteractionMode::Idle)
     {
-        updateProcessOrderLabelHover(event->pos());
+        m_camRenderLayer->updateHover(makeViewportRenderContext(), event->pos());
         updateHoveredWorldPosition(event->pos());
         updateOverlappedHandleHoverState(event->pos());
     }
     else
     {
-        m_hoveredProcessUnitKey.reset();
+        m_camRenderLayer->clearHover();
         resetOverlappedHandleHoverState();
     }
 
@@ -155,7 +158,7 @@ void CadViewer::leaveEvent(QEvent* event)
 {
     m_showCrosshairOverlay = false;
     m_hoveredViewCubeFace = ViewCubeFace::None;
-    m_hoveredProcessUnitKey.reset();
+    m_camRenderLayer->clearHover();
     resetOverlappedHandleHoverState();
     update();
     QOpenGLWidget::leaveEvent(event);

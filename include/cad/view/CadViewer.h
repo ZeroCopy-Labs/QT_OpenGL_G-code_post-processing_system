@@ -31,13 +31,11 @@
 #include "desktop/AppTheme.h"
 #include "cad/view/scene/CadGraphicsCoordinator.h"
 #include "cad/view/rendering/CadRenderTypes.h"
+#include "cad/view/rendering/ViewportRenderContext.h"
 #include "cad/view/scene/CadSceneCoordinator.h"
 #include "cad/view/interaction/CadViewInteractionController.h"
 #include "cad/view/interaction/CadController.h"
-#include "application/process/DocumentProcessState.h"
-#include "application/process/ProcessPresentationSnapshot.h"
-#include "core/machine/RotaryKinematics.h"
-#include "core/machining/TubeSection.h"
+
 
 /// 前向声明
 // 图元类
@@ -46,6 +44,10 @@ struct CadSelectionHandleInfo;
 // 数据层类
 class CadDocument;
 class CadEditer;
+// 渲染层（共享视口内的 CAD / 选择 / CAM 可视化分层）
+class CadRenderLayer;
+class SelectionRenderLayer;
+class CamRenderLayer;
 
 // CAD 视图窗口：
 // - 负责 OpenGL 初始化与绘制
@@ -64,11 +66,6 @@ public:
         Toggle
     };
 
-    enum class WindowSelectionTarget
-    {
-        Entity,
-        ProcessUnit
-    };
 
     // 构造函数，初始化 CAD 视图
     explicit CadViewer(QWidget* parent = nullptr);
@@ -81,8 +78,7 @@ public:
 
     // 设置当前编辑器
     void setEditer(CadEditer* editer);
-    void setDocumentProcessState(const cadcam::process::DocumentProcessState* processState);
-    void setProcessPresentation(const cadcam::process::ProcessPresentationSnapshot* presentation);
+
 
     // 设置默认绘图属性。
     void setDefaultDrawingProperties(const QString& layerName, const QColor& color, int colorIndex);
@@ -117,22 +113,10 @@ public:
     // 设置 Viewer 主题。
     void setTheme(const AppThemeColors& theme);
 
-    // 设置画布显示选项；这些选项不参与排序和 G 代码生成。
-    void setProcessVisualsVisible(bool visible);
-    bool processVisualsVisible() const { return m_processVisualsVisible; }
-    void setProcessDirectionVisible(bool visible);
-    void setProcessOrderVisible(bool visible);
-    void setRotaryEndCutsVisible(bool visible);
-    void setRotaryLaserWallImpactVisible(bool visible);
-    void setRotaryExpectedSurfaceVisible(bool visible);
-    void setRotaryEndCutPreview
-    (
-        const std::optional<cadcam::machining::TubeSectionModel>& section,
-        double wallThickness,
-        const cadcam::machine::RotaryMachinePolicy& machinePolicy
-    );
-    void setExcludedEntitiesDimmed(bool dimmed);
-    bool excludedEntitiesDimmed() const { return m_excludedEntitiesDimmed; }
+    // 共享视口内的 CAM 可视化层入口；CAM 显示开关、展示快照与加工单元交互都由它承担。
+    // Phase 8: SimulationRenderLayer 可以与这三个层并列挂到同一视口。
+    CamRenderLayer* camRenderLayer() const;
+
     void setBackgroundGridVisible(bool visible);
 
     // 开始绘制指定类型图元。
@@ -235,7 +219,7 @@ public:
         const QPoint& endScreenPos,
         bool crossingSelection,
         SelectionUpdateMode updateMode = SelectionUpdateMode::Replace,
-        WindowSelectionTarget target = WindowSelectionTarget::Entity
+        bool processUnitSelection = false
     );
 
     // 获取当前选中的实体集合（按场景遍历顺序）。
@@ -246,7 +230,7 @@ public:
     (
         const QPoint& anchorScreenPos,
         const QPoint& currentScreenPos,
-        WindowSelectionTarget target = WindowSelectionTarget::Entity
+        bool processUnitSelection = false
     );
 
     // 隐藏框选预览窗口。
@@ -295,7 +279,6 @@ public:
     void refreshCommandPrompt();
 
 signals:
-    void rotaryEndCutPreviewStatusChanged(const QString& status);
     // 鼠标悬停世界位置变化信号
     // @param worldPos 新的世界坐标
     void hoveredWorldPositionChanged(const QVector3D& worldPos);
@@ -322,19 +305,6 @@ signals:
     void orthoEnabledChanged(bool enabled);
     void polarTrackingEnabledChanged(bool enabled);
     void processDirectionToggleRequested(cadcam::geometry::EntityId processEntityId);
-    void processUnitMoveToBackRequested
-    (
-        QVector<cadcam::planning::ProcessUnitKey> selectedUnitKeys,
-        cadcam::planning::ProcessUnitKey targetUnitKey
-    );
-    void processUnitReverseRequested(cadcam::planning::ProcessUnitKey unitKey);
-
-    // 右键命中加工单元标签或箭头时上报，主窗口据此提供加工断面端面语义设置。
-    void processUnitContextMenuRequested
-    (
-        cadcam::planning::ProcessUnitKey unitKey,
-        const QPoint& globalPos
-    );
 
 protected:
     // OpenGL 初始化，在窗口第一次显示时调用
@@ -426,57 +396,12 @@ private:
     // @param viewProjection 视图投影矩阵
     void renderTransientPrimitives(const QMatrix4x4& viewProjection);
 
-    // 绘制加工顺序编号
-    void renderProcessOrderLabels();
 
-    // 绘制人工指定的中断切面或废弃面标签。
-    void renderRotaryEndCutLabels();
 
-    struct ProcessOrderLabelOverlay
-    {
-        cadcam::planning::ProcessUnitKey unitKey;
-        int unitOrder = -1;
-        bool hovered = false;
-        bool selected = false;
-        QPoint center;
-        QRect bubbleRect;
-        QString text;
-    };
 
-    struct ProcessUnitArrowOverlay
-    {
-        cadcam::planning::ProcessUnitKey unitKey;
-        int unitOrder = -1;
-        bool reverse = false;
-        bool selected = false;
-        QVector3D startPoint;
-        QVector3D direction;
-        QRect hitRect;
-    };
 
-    // 构建当前可见的加工顺序标签覆盖信息。
-    std::vector<ProcessOrderLabelOverlay> buildProcessOrderLabelOverlays() const;
-
-    // 更新鼠标当前命中的加工单元标签。
-    void updateProcessOrderLabelHover(const QPoint& screenPos);
-
-    // 命中加工顺序标签。
-    bool hitTestProcessOrderLabel(const QPoint& screenPos, ProcessOrderLabelOverlay* outLabel = nullptr) const;
-
-    std::vector<ProcessUnitArrowOverlay> buildProcessUnitArrowOverlays() const;
-    bool hitTestProcessUnitArrow
-        (const QPoint& screenPos, ProcessUnitArrowOverlay* outArrow = nullptr) const;
-
-    // 处理加工顺序标签单击。
-    bool handleProcessOrderLabelClick
-        (const QPoint& screenPos, Qt::KeyboardModifiers modifiers);
-
-    // 处理加工顺序标签双击。
-    bool handleProcessUnitDirectionDoubleClick(const QPoint& screenPos);
-
-    // 处理加工单元标签或箭头的右键，命中时上报单元键供主窗口创建端面语义菜单。
-    bool handleProcessUnitContextMenuPress
-        (const QPoint& screenPos, const QPoint& globalPos);
+    // 绘制 CAM 可视化层的屏幕叠加（顺序编号与端面标签）。
+    void renderCamScreenOverlays();
 
     // 绘制选中/框选候选图元的叠加高亮（AutoCAD 风格）。
     void renderEntitySelectionOverlays();
@@ -522,17 +447,9 @@ private:
         RenderEntityKey preferredRenderKey = {}
     );
 
-    struct ProcessUnitSelectionExpansion
-    {
-        QSet<RenderEntityKey> expandedRenderKeys;
-        std::vector<QSet<RenderEntityKey>> processUnitRenderKeyGroups;
-        QSet<RenderEntityKey> unassignedRenderKeys;
-    };
 
-    ProcessUnitSelectionExpansion expandRenderKeysToProcessUnits
-    (
-        const QSet<RenderEntityKey>& renderKeys
-    ) const;
+    // 构造各渲染层共用的只读视口上下文。
+    ViewportRenderContext makeViewportRenderContext() const;
 
     // 简单屏幕空间拾取，返回命中的 Viewer 渲染键
     // @param screenPos 屏幕坐标
@@ -548,15 +465,6 @@ private:
     // @return 临时图元列表
     std::vector<TransientPrimitive> buildTransientPrimitives() const;
 
-    // 构建加工方向箭头图元
-    // @return 加工方向 overlay 图元列表
-    std::vector<TransientPrimitive> buildProcessArrowPrimitives() const;
-
-    // 构建用户指定的方管中断切面和废面网格提示。
-    std::vector<TransientPrimitive> buildRotaryEndCutPrimitives() const;
-
-    // 根据当前截面和加工断面状态重建激光内壁作用点及期望断面内侧走线。
-    void rebuildRotaryEndCutPreviewPaths();
 
     // 构建选中图元的基点/控制点图元
     // @return 选中态手柄 overlay 图元列表
@@ -663,7 +571,7 @@ private:
     {
         bool visible = false;
         bool crossingSelection = false;
-        WindowSelectionTarget target = WindowSelectionTarget::Entity;
+        bool processUnitSelection = false;
         QPoint anchorScreenPos;
         QPoint currentScreenPos;
     } m_selectionWindowPreview;
@@ -677,28 +585,19 @@ private:
     // 控制器，负责接收 Viewer 输入并维护绘图状态
     CadController m_controller;
 
-    const cadcam::process::DocumentProcessState* m_processState = nullptr;
-    const cadcam::process::ProcessPresentationSnapshot* m_processPresentation = nullptr;
+    // CAD 几何渲染层。
+    std::unique_ptr<CadRenderLayer> m_cadRenderLayer;
+
+    // CAD 选择可视化层。
+    std::unique_ptr<SelectionRenderLayer> m_selectionRenderLayer;
+
+    // CAM 可视化层（共享同一视口）。
+    std::unique_ptr<CamRenderLayer> m_camRenderLayer;
+
 
     // 当前主题颜色
     AppThemeColors m_theme = buildAppThemeColors(AppThemeMode::Light);
 
-    // 当前悬停的加工单元身份；仅用于 Viewer 覆盖层状态。
-    std::optional<cadcam::planning::ProcessUnitKey> m_hoveredProcessUnitKey;
-
-    // 画布显示选项。
-    bool m_processVisualsVisible = true;
-    bool m_processDirectionVisible = true;
-    bool m_processOrderVisible = true;
-    bool m_rotaryEndCutsVisible = true;
-    bool m_rotaryLaserWallImpactVisible = true;
-    bool m_rotaryExpectedSurfaceVisible = true;
-    std::optional<cadcam::machining::TubeSectionModel> m_rotaryEndCutPreviewSection;
-    double m_rotaryTubeWallThickness = 0.0;
-    cadcam::machine::RotaryMachinePolicy m_rotaryEndCutPreviewMachinePolicy;
-    std::vector<QVector<QVector3D>> m_rotaryEndCutLaserWallImpactPreviewPaths;
-    std::vector<QVector<QVector3D>> m_rotaryEndCutExpectedSurfacePreviewPaths;
-    bool m_excludedEntitiesDimmed = true;
     bool m_backgroundGridVisible = true;
 
     // 三维视图方块当前悬停面。

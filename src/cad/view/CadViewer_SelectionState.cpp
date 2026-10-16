@@ -8,6 +8,7 @@
 #include "cad/view/interaction/CadInteractionConstants.h"
 #include "cad/items/CadItem.h"
 #include "cad/view/CadViewerUtils.h"
+#include "cad/view/rendering/CamRenderLayer.h"
 
 #include <QHash>
 
@@ -67,7 +68,7 @@ void CadViewer::selectEntitiesInWindow
     const QPoint& endScreenPos,
     bool crossingSelection,
     SelectionUpdateMode updateMode,
-    WindowSelectionTarget target
+    bool processUnitSelection
 )
 {
     CadDocument* scene = m_sceneCoordinator.document();
@@ -117,11 +118,16 @@ void CadViewer::selectEntitiesInWindow
         }
     }
 
-    ProcessUnitSelectionExpansion processUnitExpansion;
+    // 加工单元扩展由 CAM 可视化层负责；CAD 选择只处理 RenderEntityKey。
+    CamRenderLayer::SelectionExpansion processUnitExpansion;
 
-    if (target == WindowSelectionTarget::ProcessUnit)
+    if (processUnitSelection)
     {
-        processUnitExpansion = expandRenderKeysToProcessUnits(selectedRenderKeys);
+        processUnitExpansion = m_camRenderLayer->expandRenderKeysToProcessUnits
+        (
+            makeViewportRenderContext(),
+            selectedRenderKeys
+        );
         selectedRenderKeys = processUnitExpansion.expandedRenderKeys;
     }
 
@@ -132,7 +138,7 @@ void CadViewer::selectEntitiesInWindow
     {
         QSet<RenderEntityKey> mergedSelection = m_selectedRenderKeys;
 
-        if (target == WindowSelectionTarget::ProcessUnit
+        if (processUnitSelection
             && !processUnitExpansion.processUnitRenderKeyGroups.empty())
         {
             for (const QSet<RenderEntityKey>& unitRenderKeys
@@ -216,90 +222,6 @@ void CadViewer::selectEntitiesInWindow
     update();
 }
 
-CadViewer::ProcessUnitSelectionExpansion CadViewer::expandRenderKeysToProcessUnits
-(
-    const QSet<RenderEntityKey>& renderKeys
-) const
-{
-    ProcessUnitSelectionExpansion expansion;
-    expansion.expandedRenderKeys = renderKeys;
-    expansion.unassignedRenderKeys = renderKeys;
-
-    CadDocument* scene = m_sceneCoordinator.document();
-
-    if (scene == nullptr || m_processPresentation == nullptr || renderKeys.isEmpty())
-    {
-        return expansion;
-    }
-
-    QHash<cadcam::geometry::EntityId, RenderEntityKey> renderKeyByEntityId;
-    renderKeyByEntityId.reserve(static_cast<qsizetype>(scene->m_entities.size()));
-
-    for (const std::unique_ptr<CadItem>& entity : scene->m_entities)
-    {
-        if (entity == nullptr || entity->m_entityId == 0)
-        {
-            continue;
-        }
-
-        const RenderEntityKey renderKey = CadViewerUtils::toRenderEntityKey(entity.get());
-
-        if (renderKey.valid())
-        {
-            renderKeyByEntityId.insert(entity->m_entityId, renderKey);
-        }
-    }
-
-    for (const cadcam::process::ProcessUnitPresentation& processUnit
-        : m_processPresentation->processUnits)
-    {
-        bool unitHit = false;
-
-        for (cadcam::geometry::EntityId entityId : processUnit.orderedMemberEntityIds)
-        {
-            const auto iterator = renderKeyByEntityId.constFind(entityId);
-
-            if (iterator != renderKeyByEntityId.cend() && renderKeys.contains(iterator.value()))
-            {
-                unitHit = true;
-                break;
-            }
-        }
-
-        if (!unitHit)
-        {
-            continue;
-        }
-
-        QSet<RenderEntityKey> unitRenderKeys;
-        unitRenderKeys.reserve
-        (
-            static_cast<qsizetype>(processUnit.orderedMemberEntityIds.size())
-        );
-
-        for (cadcam::geometry::EntityId entityId : processUnit.orderedMemberEntityIds)
-        {
-            const auto iterator = renderKeyByEntityId.constFind(entityId);
-
-            if (iterator == renderKeyByEntityId.cend())
-            {
-                continue;
-            }
-
-            unitRenderKeys.insert(iterator.value());
-            expansion.expandedRenderKeys.insert(iterator.value());
-            expansion.unassignedRenderKeys.remove(iterator.value());
-        }
-
-        if (!unitRenderKeys.isEmpty())
-        {
-            expansion.processUnitRenderKeyGroups.push_back(std::move(unitRenderKeys));
-        }
-    }
-
-    return expansion;
-}
-
 QVector<CadItem*> CadViewer::selectedEntities() const
 {
     QVector<CadItem*> entities;
@@ -334,14 +256,14 @@ void CadViewer::showSelectionWindowPreview
 (
     const QPoint& anchorScreenPos,
     const QPoint& currentScreenPos,
-    WindowSelectionTarget target
+    bool processUnitSelection
 )
 {
     m_selectionWindowPreview.visible = true;
     m_selectionWindowPreview.anchorScreenPos = anchorScreenPos;
     m_selectionWindowPreview.currentScreenPos = currentScreenPos;
     m_selectionWindowPreview.crossingSelection = currentScreenPos.x() < anchorScreenPos.x();
-    m_selectionWindowPreview.target = target;
+    m_selectionWindowPreview.processUnitSelection = processUnitSelection;
     updateSelectionWindowPreviewCandidates();
     update();
 }

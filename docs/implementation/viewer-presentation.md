@@ -2,18 +2,21 @@
 
 ## 职责
 
-Viewer 展示当前加工单元顺序、逐图元方向、排除状态和选择反馈。
+共享视口由一个 `CadViewer` 承担，内部分为三个渲染层：`CadRenderLayer`（CAD 几何）、`SelectionRenderLayer`（CAD 选择、吸附与手柄）、`CamRenderLayer`（CAM 可视化）。
+`CamRenderLayer` 展示当前加工单元顺序、逐图元方向、排除淡化、旋转端面与预览，并处理加工单元命中与选择扩展。
 加工顺序以加工单元为展示粒度，一个加工单元只显示一个编号。
-Viewer 不拥有加工单元身份、加工单元序列或计划事实。
+三个层都不拥有加工单元身份、加工单元序列或计划事实；`CamRenderLayer` 只读 `DocumentProcessState`。
 
 ## 生产入口
 
-- 当前计划成功后，Application 由 `ProcessPlan` 构建 `ProcessPresentationSnapshot` 并交给 Viewer。
+- 当前计划成功后，Application 由 `ProcessPlan` 构建 `ProcessPresentationSnapshot` 并交给 `CamRenderLayer::setPresentation()`，由该层持有展示快照。
+- 计划失效时 Application 调用 `CamRenderLayer::clearPresentation()`，旧的顺序、箭头和排除状态随之消失。
 - 普通排序和智能排序已经通过显式 `ProcessSortIntent` 产生不同单元序列，Viewer 仅接收最终计划展示结果。
-- `CadViewer::renderProcessOrderLabels()` 构建并绘制当前加工顺序标签。
-- 标签命中和点击由 `CadViewer_ProcessOrderLabels.cpp` 处理。
-- Ctrl 单击标签时，Viewer 向 Application 上报当前选中单元键和目标单元键；Viewer 本身不修改加工单元序列。
-- 右键命中加工单元标签或箭头时，Viewer 先按普通单击选中该单元，再上报单元键和屏幕坐标；主窗口据此提供加工断面端面语义菜单。
+- `CamRenderLayer::paintScreenOverlays()` 构建并绘制当前加工顺序标签与端面标签。
+- 标签命中和点击由 `CamRenderLayer` 处理。
+- Ctrl 单击标签时，`CamRenderLayer` 向 Application 上报当前选中单元键和目标单元键；Viewer 与渲染层都不修改加工单元序列。
+- 右键命中加工单元标签或箭头时，`CamRenderLayer` 先按普通单击选中该单元，再上报单元键和屏幕坐标；主窗口据此提供加工断面端面语义菜单。
+- 被排除图元的淡化由 `CamRenderLayer::buildRenderOverrides()` 计算成中立的颜色与透明度，`CadRenderLayer` 只执行显示参数。
 
 ## 输入与输出
 
@@ -26,7 +29,9 @@ Viewer 不拥有加工单元身份、加工单元序列或计划事实。
 
 - `ProcessPresentationSnapshot`：同时保存单元级展示项和逐图元方向、起点、连续组及排除结果。
 - `ProcessUnitPresentation`：保存单元键、零基单元序号、实际成员执行顺序和锚点成员身份。
-- `ProcessOrderLabelOverlay`：保存标签对应的单元键、单元序号、悬停和选择状态、屏幕位置及命中区域。
+- `CamRenderLayer::ProcessOrderLabelOverlay`：保存标签对应的单元键、单元序号、悬停和选择状态、屏幕位置及命中区域。
+- `CadRenderOverride`：中立的实体显示覆盖（颜色与透明度），由 CAM 层计算、CAD 层执行。
+- `ViewportRenderContext`：共享视口传给三个渲染层的只读上下文（相机矩阵、视口尺寸、主题、交互是否空闲）。
 - `RenderEntityKey`：Viewer 对象生命周期内使用的渲染和选择键，不是加工身份。
 - `ProcessUnitKey`：当前核心加工单元身份，由成员稳定 `EntityId` 的排序规范集合形成。
 - `ProcessUnitSequence`：Application 当前持有的唯一单元序列，序列位置产生 `1..N` 编号。
@@ -39,7 +44,7 @@ ProcessPlan.processUnits
 → ProcessPresentationSnapshot::build()
 → 校验单元键、成员集合、执行顺序和计划序列
 → 每个 ProcessUnit 生成一个 ProcessUnitPresentation
-→ CadViewer 以 anchorEntityId 查找首个实际执行成员
+→ CamRenderLayer 以 anchorEntityId 查找首个实际执行成员
 → 使用该成员实际加工起点生成一个顺序标签
 ```
 
@@ -47,9 +52,11 @@ ProcessPlan.processUnits
 
 ## 状态所有权
 
-Application 的 `DocumentProcessState` 拥有当前 `ProcessUnitSequence` 及其 revision。
+Application 的 `DocumentProcessState` 拥有当前 `ProcessUnitSequence` 及其 revision，`CamJob` 持有该状态。
 Core 负责依据统一加工路径和连续关系形成 `ProcessUnit` 集合。
-Viewer 仅保存当前屏幕命中区域、临时悬停和选择反馈。
+`CamRenderLayer` 持有当前展示快照、CAM 显示开关、旋转端面预览参数，以及当前屏幕命中区域和临时悬停。
+`CadViewer` 保存 CAD 选择状态、相机、吸附与命令状态。
+CAM 显示偏好的持久化仍由桌面层的设置管理，渲染层只保存运行时状态。
 
 当前单元编号锚点由展示快照指定为实际执行顺序中的首个成员。Viewer 只用该成员计算实际加工起点附近的屏幕位置，标签业务身份始终是完整 `ProcessUnitKey`。
 
@@ -95,7 +102,10 @@ Ctrl 单击时，Viewer 将当前选中图元的稳定 `EntityId` 映射到展�
 
 ## 相关源码
 
-- `src/cad/view/CadViewer_ProcessOrderLabels.cpp`：单元顺序标签的构建、绘制、命中、整组选择和 Ctrl 交互请求处理。
+- `src/cad/view/rendering/CamRenderLayer.cpp`：CAM 可视化状态、加工顺序标签与端面标签、方向箭头、排除覆盖、加工单元命中与选择扩展、交互请求。
+- `src/cad/view/rendering/CadRenderLayer.cpp`：CAD 几何绘制入口，执行上层给出的中立显示覆盖。
+- `src/cad/view/rendering/SelectionRenderLayer.cpp`：CAD 选中与框选候选高亮、框选窗口、选中手柄、吸附高亮、重叠手柄弹框。
+- `src/cad/view/rendering/CadEntityRenderer.cpp`：底层 CAD 图元绘制，只消费 CAD 图元与中立显示覆盖。
 - `src/application/process/ProcessPresentationSnapshot.cpp`：校验计划并生成单元级和逐图元展示数据。
 - `include/application/process/ProcessPresentationSnapshot.h`：定义单元级与逐图元展示快照。
 - `include/core/planning/ProcessPlan.h`：定义加工单元、单元序列和逐图元 assignment。

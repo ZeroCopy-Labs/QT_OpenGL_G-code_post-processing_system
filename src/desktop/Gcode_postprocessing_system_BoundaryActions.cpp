@@ -8,7 +8,7 @@
 #include "cad/items/CadEllipseItem.h"
 #include "cad/geometry/CadEllipseGeometry.h"
 #include "cad/geometry/CadOcsGeometry.h"
-#include "cad/view/rendering/CadProcessVisualUtils.h"
+#include "cad/view/rendering/CadSelectionVisualUtils.h"
 #include "application/machining/RotaryCutBoundaryAnalyzer.h"
 #include "application/machining/RotaryPathTopology.h"
 #include "application/planning/ProcessPlanningService.h"

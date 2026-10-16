@@ -36,7 +36,7 @@ Compatibility 仅位于遗留对象转换边界。新业务事实进入 Core 后
 CAD 编辑和加工状态编辑共用一个 Undo/Redo 栈，因此按用户操作发生顺序统一撤销和重做；CAD 层不定义加工单元排序或遍历专用命令。
 删除、批量删除和替换命令本身只维护 CAD 文档：`CadEditer` 通过业务无关的编辑伴随工厂，把本次编辑涉及和新增的图元身份交给 Application。
 Application 的 `ProcessStateEditSync` 在同一历史项内完成加工状态清理和加工单元序列恢复，`CadEditer` 不知道 `DocumentProcessState` 的存在。
-`CadViewer`、CAD 渲染器和 `GGenerator` 仍直接依赖 `DocumentProcessState` 与 `ProcessPresentationSnapshot`，这部分留待后续渲染层和导出阶段迁移。
+共享视口仍是一个 `CadViewer`，但内部已分为 `CadRenderLayer`、`SelectionRenderLayer` 和 `CamRenderLayer`：CAD 渲染与 CAD 选择只依赖 CAD 图元、GPU 缓存和中立显示覆盖，CAM 可视化由 `CamRenderLayer` 承担并持有展示快照。`CadViewer.h` 不再包含加工状态与展示快照类型，只保留 `CamRenderLayer* camRenderLayer()` 入口。
 
 ## 3. CAM 任务边界
 
@@ -77,7 +77,7 @@ NC 与 Post 边界：`NcProgramService` 的三轴与四轴入口都只接收 `Ge
 
 `DocumentPlanarNcInputAdapter`、`DocumentNcMetadataAdapter` 与 `LegacyCadItemPathBridge` 保留在 compatibility 层，生产 NC 路径不再调用它们。仍然直接接收 `CadDocument` 的消费者只剩 `GGenerator` 之外的兼容层适配器与 `DocumentGeometrySnapshotBuilder` 本身。
 
-`ProcessPresentationSnapshot` 仍由桌面层持有并交给 Viewer，`RotaryTubeSectionModel` 仍由桌面层持有，本阶段未迁移。
+`ProcessPresentationSnapshot` 由桌面层构建后交给 `CamRenderLayer` 持有，`RotaryTubeSectionModel` 仍由桌面层持有。
 
 ## 4. Core 边界
 
@@ -93,7 +93,9 @@ CAD 与外部格式数据应在进入 Core 前完成捕获和适配。Core 计�
 
 ## 5. 显示与业务边界
 
-Viewer 使用 CAD 文档和当前加工展示快照完成渲染、拾取、标签和方向箭头显示。图元选择通过稳定图元身份映射到加工单元选择，一个加工单元只显示一个顺序编号。加工单元身份和序列由 Core 与 Application 提供，Viewer 不自行生成或保存这些业务事实。GPU 缓存键和临时选择状态仅在 Viewer 生命周期内使用。
+共享视口用一个 `CadViewer` 承载三个渲染层。`CadRenderLayer` 只绘制 CAD 几何并执行上层给出的中立显示覆盖；`SelectionRenderLayer` 只绘制 CAD 选中、框选、手柄与吸附反馈；`CamRenderLayer` 只读取加工状态并绘制加工顺序、方向、排除淡化、旋转端面与预览，同时负责加工单元命中与选择扩展。
+
+图元选择通过稳定图元身份映射到加工单元选择，一个加工单元只显示一个顺序编号。加工单元身份和序列由 Core 与 Application 提供，渲染层不自行生成或保存这些业务事实，也不修改加工状态：`CamRenderLayer` 只发出交互请求，由桌面层修改 `CamJob` 与 `ProcessState`。GPU 缓存键、临时选择状态、CAM 显示开关与旋转预览参数仅在 Viewer 生命周期内使用；显示偏好的持久化仍由桌面层设置负责。Phase 8 的 SimulationRenderLayer 可以与这三层并列挂到同一视口。
 
 ## 6. 外部格式边界
 

@@ -4,7 +4,8 @@
 #include "cad/view/CadViewer.h"
 
 #include "cad/items/CadItem.h"
-#include "cad/view/rendering/CadProcessVisualUtils.h"
+#include "cad/view/rendering/CadSelectionVisualUtils.h"
+#include "cad/view/rendering/SelectionRenderLayer.h"
 #include "cad/view/CadViewerUtils.h"
 
 #include <algorithm>
@@ -28,14 +29,6 @@ namespace
         int handleIndex = -1;
         float distanceSquared = std::numeric_limits<float>::max();
         int priority = 1;
-    };
-
-    struct OverlappedHandlePopupLayout
-    {
-        QRect panelRect;
-        QVector<QRect> rowRects;
-        QVector<QString> rowTexts;
-        QRect badgeRect;
     };
 
     QVector<int> collectEditableHandleCandidates
@@ -105,178 +98,6 @@ namespace
         return orderedIndices;
     }
 
-    QString handleTypeDisplayName(const CadItem* selectedItem, const CadSelectionHandleInfo& handle)
-    {
-        if (handle.isBasePoint)
-        {
-            return QStringLiteral("基点");
-        }
-
-        if (selectedItem == nullptr)
-        {
-            return QStringLiteral("拉伸点");
-        }
-
-        switch (selectedItem->m_type)
-        {
-        case DRW::ETYPE::POINT:
-            return QStringLiteral("点位控制点");
-        case DRW::ETYPE::LINE:
-            return handle.pointIndex == 2 ? QStringLiteral("中心移动点") : QStringLiteral("端点拉伸点");
-        case DRW::ETYPE::XLINE:
-            return (handle.pointIndex == 1 || handle.pointIndex == 2)
-                ? QStringLiteral("方向控制点")
-                : QStringLiteral("拉伸点");
-        case DRW::ETYPE::CIRCLE:
-            return QStringLiteral("半径控制点");
-        case DRW::ETYPE::ARC:
-            if (handle.pointIndex == 1)
-            {
-                return QStringLiteral("起点拉伸点");
-            }
-
-            if (handle.pointIndex == 2)
-            {
-                return QStringLiteral("半径控制点");
-            }
-
-            if (handle.pointIndex == 3)
-            {
-                return QStringLiteral("终点拉伸点");
-            }
-
-            return QStringLiteral("拉伸点");
-        case DRW::ETYPE::ELLIPSE:
-            if (handle.pointIndex == 1 || handle.pointIndex == 2)
-            {
-                return QStringLiteral("长轴控制点");
-            }
-
-            if (handle.pointIndex == 3 || handle.pointIndex == 4)
-            {
-                return QStringLiteral("短轴控制点");
-            }
-
-            if (handle.pointIndex == 5)
-            {
-                return QStringLiteral("起点拉伸点");
-            }
-
-            if (handle.pointIndex == 6)
-            {
-                return QStringLiteral("终点拉伸点");
-            }
-
-            return QStringLiteral("拉伸点");
-        case DRW::ETYPE::POLYLINE:
-        case DRW::ETYPE::LWPOLYLINE:
-            return QStringLiteral("顶点拉伸点");
-        default:
-            return QStringLiteral("拉伸点");
-        }
-    }
-
-    QString overlappedHandleRowText
-    (
-        const CadItem* selectedItem,
-        const CadSelectionHandleInfo& handle,
-        int ordinal
-    )
-    {
-        return QStringLiteral("%1. %2")
-            .arg(ordinal + 1)
-            .arg(handleTypeDisplayName(selectedItem, handle));
-    }
-
-    bool computeOverlappedHandlePopupLayout
-    (
-        const CadItem* selectedItem,
-        const QVector<CadSelectionHandleInfo>& handles,
-        const QVector<int>& candidateIndices,
-        int activeCandidateOrdinal,
-        const QPoint& cursorScreenPos,
-        const QSize& viewportSize,
-        const QFontMetrics& metrics,
-        OverlappedHandlePopupLayout& layout
-    )
-    {
-        if (candidateIndices.size() < 2 || viewportSize.width() <= 0 || viewportSize.height() <= 0)
-        {
-            return false;
-        }
-
-        layout.rowTexts.clear();
-        layout.rowTexts.reserve(candidateIndices.size());
-        int maxTextWidth = 0;
-
-        for (int ordinal = 0; ordinal < candidateIndices.size(); ++ordinal)
-        {
-            const int handleIndex = candidateIndices.at(ordinal);
-
-            if (handleIndex < 0 || handleIndex >= handles.size())
-            {
-                continue;
-            }
-
-            const CadSelectionHandleInfo& handle = handles.at(handleIndex);
-            const QString rowText = overlappedHandleRowText(selectedItem, handle, ordinal);
-            layout.rowTexts.push_back(rowText);
-            maxTextWidth = std::max(maxTextWidth, metrics.horizontalAdvance(rowText));
-        }
-
-        if (layout.rowTexts.size() < 2)
-        {
-            return false;
-        }
-
-        const int panelPaddingX = 14;
-        const int panelPaddingY = 10;
-        const int rowHeight = std::max(22, metrics.height() + 8);
-        const int desiredPanelWidth = maxTextWidth + panelPaddingX * 2 + 24;
-        const int maxPanelWidth = std::max(140, viewportSize.width() - 16);
-        const int panelWidth = std::min(desiredPanelWidth, maxPanelWidth);
-        const int panelHeight = panelPaddingY * 2 + rowHeight * layout.rowTexts.size();
-        QPoint panelTopLeft = cursorScreenPos + QPoint(18, 16);
-
-        if (panelTopLeft.x() + panelWidth > viewportSize.width() - 8)
-        {
-            panelTopLeft.setX(std::max(8, viewportSize.width() - panelWidth - 8));
-        }
-
-        if (panelTopLeft.y() + panelHeight > viewportSize.height() - 8)
-        {
-            panelTopLeft.setY(std::max(8, viewportSize.height() - panelHeight - 8));
-        }
-
-        layout.panelRect = QRect(panelTopLeft, QSize(panelWidth, panelHeight));
-        layout.rowRects.clear();
-        layout.rowRects.reserve(layout.rowTexts.size());
-
-        for (int ordinal = 0; ordinal < layout.rowTexts.size(); ++ordinal)
-        {
-            const QRect rowRect
-            (
-                panelTopLeft.x() + panelPaddingX,
-                panelTopLeft.y() + panelPaddingY + ordinal * rowHeight,
-                panelWidth - panelPaddingX * 2,
-                rowHeight
-            );
-            layout.rowRects.push_back(rowRect);
-        }
-
-        const int badgeRadius = 9;
-        const QPoint badgeCenter = cursorScreenPos + QPoint(13, -13);
-        layout.badgeRect = QRect
-        (
-            badgeCenter.x() - badgeRadius,
-            badgeCenter.y() - badgeRadius,
-            badgeRadius * 2,
-            badgeRadius * 2
-        );
-
-        Q_UNUSED(activeCandidateOrdinal);
-        return true;
-    }
 }
 
 void CadViewer::resetOverlappedHandleHoverState()
@@ -449,9 +270,9 @@ bool CadViewer::handleOverlappedHandlePopupPress(const QPoint& screenPos)
     QFont popupFont = font();
     popupFont.setPointSize(9);
     const QFontMetrics metrics(popupFont);
-    OverlappedHandlePopupLayout popupLayout;
+    SelectionRenderLayer::HandlePopupLayout popupLayout;
 
-    if (!computeOverlappedHandlePopupLayout
+    if (!m_selectionRenderLayer->computeHandlePopupLayout
     (
         selectedItem,
         handles,
@@ -555,17 +376,11 @@ void CadViewer::renderOverlappedHandlePopup()
     }
 
     QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.setRenderHint(QPainter::TextAntialiasing, true);
+    const ViewportRenderContext context = makeViewportRenderContext();
+    SelectionRenderLayer::HandlePopupLayout popupLayout;
+    const QFontMetrics metrics(font());
 
-    QFont popupFont = painter.font();
-    popupFont.setPointSize(9);
-    painter.setFont(popupFont);
-    const QFontMetrics metrics(popupFont);
-
-    OverlappedHandlePopupLayout popupLayout;
-
-    if (!computeOverlappedHandlePopupLayout
+    if (!m_selectionRenderLayer->computeHandlePopupLayout
     (
         selectedItem,
         handles,
@@ -580,62 +395,16 @@ void CadViewer::renderOverlappedHandlePopup()
         return;
     }
 
-    painter.setPen(QPen(QColor(15, 22, 30, 210), 1.0));
-    painter.setBrush(QColor(255, 186, 54, 235));
-    painter.drawEllipse(popupLayout.badgeRect);
-    painter.setPen(QColor(18, 24, 33));
-    painter.drawText(popupLayout.badgeRect, Qt::AlignCenter, QString::number(m_overlappedHandleHoverState.candidateIndices.size()));
-
-    if (!m_overlappedHandleHoverState.popupVisible)
-    {
-        return;
-    }
-
-    painter.setPen(QPen(QColor(94, 176, 255, 230), 1.0));
-    painter.setBrush(QColor(20, 26, 34, 228));
-    painter.drawRoundedRect(popupLayout.panelRect, 7.0, 7.0);
-
-    const int rowCount = popupLayout.rowRects.size();
-    const int activeOrdinal = std::clamp(m_overlappedHandleHoverState.activeCandidateOrdinal, 0, rowCount - 1);
-
-    for (int ordinal = 0; ordinal < rowCount; ++ordinal)
-    {
-        const QRect rowRect = popupLayout.rowRects.at(ordinal);
-        const QString rowText = ordinal < popupLayout.rowTexts.size()
-            ? popupLayout.rowTexts.at(ordinal)
-            : QStringLiteral("%1. 拉伸点").arg(ordinal + 1);
-        const QString displayText = metrics.elidedText(rowText, Qt::ElideRight, std::max(20, rowRect.width() - 8));
-
-        if (ordinal == activeOrdinal)
-        {
-            painter.setPen(Qt::NoPen);
-            painter.setBrush(QColor(84, 166, 255, 96));
-            painter.drawRoundedRect(rowRect.adjusted(0, 0, 0, -1), 4.0, 4.0);
-        }
-
-        painter.setPen(ordinal == activeOrdinal ? QColor(255, 248, 227) : QColor(220, 230, 242));
-        painter.drawText(rowRect.adjusted(4, 0, -4, 0), Qt::AlignVCenter | Qt::AlignLeft, displayText);
-    }
-
-    const QString hintText = QStringLiteral("Tab/Shift+Tab 切换");
-    const int hintTop = popupLayout.panelRect.bottom() + 5;
-    QRect hintRect
+    m_selectionRenderLayer->renderHandlePopup
     (
-        popupLayout.panelRect.left(),
-        hintTop,
-        popupLayout.panelRect.width(),
-        metrics.height() + 2
+        painter,
+        context,
+        popupLayout,
+        m_overlappedHandleHoverState.candidateIndices.size(),
+        m_overlappedHandleHoverState.activeCandidateOrdinal,
+        m_overlappedHandleHoverState.popupVisible
     );
-
-    if (hintRect.bottom() > height() - 4)
-    {
-        hintRect.moveTop(popupLayout.panelRect.top() - hintRect.height() - 4);
-    }
-
-    painter.setPen(QColor(150, 172, 194, 228));
-    painter.drawText(hintRect, Qt::AlignLeft | Qt::AlignVCenter, hintText);
 }
-
 void CadViewer::renderDynamicInputOverlay()
 {
     if (interactionMode() != ViewInteractionMode::Idle)

@@ -13,7 +13,7 @@
 // CAD 模块内部依赖
 #include "cad/editing/CadEditer.h"
 #include "cad/items/CadItem.h"
-#include "cad/view/rendering/CadProcessVisualUtils.h"
+#include "cad/view/rendering/CadSelectionVisualUtils.h"
 #include "cad/view/CadViewer.h"
 
 // 标准库

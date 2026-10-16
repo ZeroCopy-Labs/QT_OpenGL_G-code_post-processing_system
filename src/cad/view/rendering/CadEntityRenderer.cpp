@@ -6,7 +6,6 @@
 #include "cad/view/rendering/CadEntityRenderer.h"
 
 #include "cad/items/CadItem.h"
-#include "cad/view/rendering/CadProcessVisualUtils.h"
 #include "cad/view/scene/CadSceneRenderCache.h"
 #include "cad/view/CadViewerUtils.h"
 
@@ -93,6 +92,8 @@ namespace
 // @param entities 场景实体列表
 // @param sceneRenderCache 实体对应的 GPU 缓冲缓存
 // @param selectedRenderKey 当前选中的 Viewer 实体键
+// @param theme 当前主题颜色
+// @param overrides 实体显示覆盖，可为空
 void CadEntityRenderer::renderEntities
 (
     QOpenGLShaderProgram& shader,
@@ -101,8 +102,7 @@ void CadEntityRenderer::renderEntities
     CadSceneRenderCache& sceneRenderCache,
     RenderEntityKey selectedRenderKey,
     const AppThemeColors& theme,
-    bool dimExcludedEntities,
-    const cadcam::process::ProcessPresentationSnapshot* presentation
+    const CadRenderOverrideMap* overrides
 )
 {
     QOpenGLFunctions* functions = currentFunctions();
@@ -135,17 +135,20 @@ void CadEntityRenderer::renderEntities
         EntityGpuBuffer& buffer = it->second;
         // 保持实体原始显示色；选中效果改由 Viewer 的叠加层统一绘制。
         const bool isSelected = entity->m_isSelected || renderKey == selectedRenderKey;
-        const CadProcessExclusionVisual exclusionVisual = dimExcludedEntities
-            ? resolveProcessExclusionVisual(entity.get(), presentation)
-            : CadProcessExclusionVisual::None;
         QVector3D color = resolveDisplayColor(buffer.color, theme);
         float opacity = 1.0f;
-        if (exclusionVisual == CadProcessExclusionVisual::PlannedExclusion)
+        // 中立显示覆盖：本层只应用最终参数，不判断覆盖原因。
+        if (overrides != nullptr && !overrides->empty())
         {
-            color = theme.dark
-                ? QVector3D(0.58f, 0.48f, 0.34f)
-                : QVector3D(0.48f, 0.39f, 0.28f);
-            opacity = 0.42f;
+            const auto overrideIterator = overrides->find(renderKey);
+            if (overrideIterator != overrides->end())
+            {
+                if (overrideIterator->second.hasColor)
+                {
+                    color = overrideIterator->second.color;
+                }
+                opacity = overrideIterator->second.opacity;
+            }
         }
         const float pointSize = buffer.primitiveType == GL_POINTS ? (isSelected ? 9.5f : 8.0f) : 1.0f;
 

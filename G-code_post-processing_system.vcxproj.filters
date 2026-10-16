@@ -406,9 +406,6 @@
     <ClCompile Include="src\cad\view\CadViewer_EventHandling.cpp">
       <Filter>Source Files\cad\view</Filter>
     </ClCompile>
-    <ClCompile Include="src\cad\view\CadViewer_ProcessOrderLabels.cpp">
-      <Filter>Source Files\cad\view</Filter>
-    </ClCompile>
     <ClCompile Include="src\cad\view\CadViewer_SelectionState.cpp">
       <Filter>Source Files\cad\view</Filter>
     </ClCompile>
@@ -489,6 +486,21 @@
     </ClCompile>
     <ClCompile Include="src\cad\view\interaction\CadViewInteractionController.cpp">
       <Filter>Source Files\cad\view\interaction</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cad\view\rendering\CadRenderLayer.cpp">
+      <Filter>Source Files\cad\view\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cad\view\rendering\CamRenderLayer.cpp">
+      <Filter>Source Files\cad\view\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cad\view\rendering\CamRenderVisualUtils.cpp">
+      <Filter>Source Files\cad\view\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cad\view\rendering\CadSelectionVisualUtils.cpp">
+      <Filter>Source Files\cad\view\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cad\view\rendering\SelectionRenderLayer.cpp">
+      <Filter>Source Files\cad\view\rendering</Filter>
     </ClCompile>
     <ClCompile Include="src\cad\view\rendering\CadEntityRenderer.cpp">
       <Filter>Source Files\cad\view\rendering</Filter>
@@ -661,9 +673,6 @@
     <ClCompile Include="src\cad\items\CadPointItem.cpp">
       <Filter>Source Files\cad\items</Filter>
     </ClCompile>
-    <ClCompile Include="src\cad\view\rendering\CadProcessVisualUtils.cpp">
-      <Filter>Source Files\cad\view\rendering</Filter>
-    </ClCompile>
     <ClCompile Include="src\cad\items\CadPolylineItem.cpp">
       <Filter>Source Files\cad\items</Filter>
     </ClCompile>
@@ -789,14 +798,32 @@
     <ClInclude Include="include\cad\view\rendering\CadPreviewBuilder.h">
       <Filter>Header Files\cad\view\rendering</Filter>
     </ClInclude>
-    <ClInclude Include="include\cad\view\rendering\CadProcessVisualUtils.h">
-      <Filter>Header Files\cad\view\rendering</Filter>
-    </ClInclude>
     <ClInclude Include="include\cad\view\interaction\CadViewInteractionController.h">
       <Filter>Header Files\cad\view\interaction</Filter>
     </ClInclude>
     <ClInclude Include="include\cad\view\interaction\CadInteractionConstants.h">
       <Filter>Header Files\cad\view\interaction</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cad\view\rendering\CadItemGeometryDetail.h">
+      <Filter>Header Files\cad\view\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cad\view\rendering\CadRenderLayer.h">
+      <Filter>Header Files\cad\view\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cad\view\rendering\CamRenderLayer.h">
+      <Filter>Header Files\cad\view\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cad\view\rendering\CamRenderVisualUtils.h">
+      <Filter>Header Files\cad\view\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cad\view\rendering\CadSelectionVisualUtils.h">
+      <Filter>Header Files\cad\view\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cad\view\rendering\SelectionRenderLayer.h">
+      <Filter>Header Files\cad\view\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cad\view\rendering\ViewportRenderContext.h">
+      <Filter>Header Files\cad\view\rendering</Filter>
     </ClInclude>
     <ClInclude Include="include\cad\view\rendering\CadEntityRenderer.h">
       <Filter>Header Files\cad\view\rendering</Filter>

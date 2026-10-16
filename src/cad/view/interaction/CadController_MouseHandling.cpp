@@ -204,16 +204,13 @@ void CadController::updateIdleWindowSelection(const QPoint& screenPos)
         m_idleWindowSelectionDragging = true;
     }
 
-    const CadViewer::WindowSelectionTarget selectionTarget =
-        (m_drawState.keyboardModifiers & Qt::ControlModifier) != 0
-        ? CadViewer::WindowSelectionTarget::ProcessUnit
-        : CadViewer::WindowSelectionTarget::Entity;
+    const bool processUnitSelection = (m_drawState.keyboardModifiers & Qt::ControlModifier) != 0;
 
     m_viewer->showSelectionWindowPreview
     (
         m_idleWindowSelectionAnchor,
         m_idleWindowSelectionCurrent,
-        selectionTarget
+        processUnitSelection
     );
 }
 
@@ -243,18 +240,13 @@ bool CadController::finishIdleWindowSelection(const QPoint& screenPos)
             shiftSelectionToggle
             ? CadViewer::SelectionUpdateMode::Toggle
             : CadViewer::SelectionUpdateMode::Replace;
-        const CadViewer::WindowSelectionTarget selectionTarget =
-            processUnitSelection
-            ? CadViewer::WindowSelectionTarget::ProcessUnit
-            : CadViewer::WindowSelectionTarget::Entity;
-
         m_viewer->selectEntitiesInWindow
         (
             selectionAnchor,
             screenPos,
             crossingSelection,
             updateMode,
-            selectionTarget
+            processUnitSelection
         );
         m_viewer->appendCommandMessage
         (
