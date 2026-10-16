@@ -18,6 +18,7 @@
 #include "cad/view/rendering/CadSelectionVisualUtils.h"
 #include "cad/view/rendering/CamRenderLayer.h"
 #include "cad/view/rendering/SelectionRenderLayer.h"
+#include "cad/view/rendering/SimulationRenderLayer.h"
 #include "cad/view/rendering/CadPreviewBuilder.h"
 #include "cad/view/transform/CadViewTransform.h"
 #include "cad/view/CadViewerUtils.h"
@@ -85,6 +86,7 @@ CadViewer::CadViewer(QWidget* parent)
     m_cadRenderLayer = std::make_unique<CadRenderLayer>();
     m_selectionRenderLayer = std::make_unique<SelectionRenderLayer>();
     m_camRenderLayer = std::make_unique<CamRenderLayer>();
+    m_simulationRenderLayer = std::make_unique<SimulationRenderLayer>();
     // CAM 层只产生请求，选择与消息由共享视口执行。
     connect(m_camRenderLayer.get(), &CamRenderLayer::selectionRequested, this,
         [this](QSet<RenderEntityKey> renderKeys, RenderEntityKey preferredRenderKey, bool)
@@ -185,6 +187,11 @@ void CadViewer::setEditer(CadEditer* editer)
 CamRenderLayer* CadViewer::camRenderLayer() const
 {
     return m_camRenderLayer.get();
+}
+
+SimulationRenderLayer* CadViewer::simulationRenderLayer() const
+{
+    return m_simulationRenderLayer.get();
 }
 
 ViewportRenderContext CadViewer::makeViewportRenderContext() const
@@ -592,6 +599,7 @@ void CadViewer::paintGL()
     renderScreenCrosshair();
     renderEntitySelectionOverlays();
     renderCamScreenOverlays();
+    renderSimulationOverlay();
     renderSelectionWindowPreview();
     renderOverlappedHandlePopup();
     renderDynamicInputOverlay();
@@ -723,6 +731,10 @@ void CadViewer::renderTransientPrimitives(const QMatrix4x4& viewProjection)
     const ViewportRenderContext context = makeViewportRenderContext();
     // CAM 可视化（方向箭头、旋转端面与预览走线）由 CAM 层提供。
     std::vector<TransientPrimitive> primitives = m_camRenderLayer->buildOverlayPrimitives(context);
+    // 仿真轨迹与刀具标记由仿真层提供。
+    const std::vector<TransientPrimitive> simulationPrimitives =
+        m_simulationRenderLayer->buildPrimitives(context);
+    primitives.insert(primitives.end(), simulationPrimitives.begin(), simulationPrimitives.end());
     const std::vector<TransientPrimitive> selectedHandlePrimitives = buildSelectedEntityHandlePrimitives();
     const std::vector<TransientPrimitive> snapHighlightPrimitives = buildSnapHighlightPrimitives();
     // 构建命令预览图元

@@ -9,6 +9,7 @@
 #include "cad/view/CadViewerUtils.h"
 #include "cad/view/rendering/CamRenderLayer.h"
 #include "cad/view/rendering/SelectionRenderLayer.h"
+#include "cad/view/rendering/SimulationRenderLayer.h"
 
 #include <QPainter>
 #include <QPen>
@@ -117,6 +118,17 @@ void CadViewer::renderCamScreenOverlays()
 
     QPainter painter(this);
     m_camRenderLayer->paintScreenOverlays(painter, makeViewportRenderContext());
+}
+
+void CadViewer::renderSimulationOverlay()
+{
+    if (interactionMode() != ViewInteractionMode::Idle)
+    {
+        return;
+    }
+
+    QPainter painter(this);
+    m_simulationRenderLayer->paintStatusOverlay(painter, makeViewportRenderContext());
 }
 
 void CadViewer::renderSelectionWindowPreview()

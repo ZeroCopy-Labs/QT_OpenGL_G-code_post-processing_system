@@ -48,6 +48,7 @@ class CadEditer;
 class CadRenderLayer;
 class SelectionRenderLayer;
 class CamRenderLayer;
+class SimulationRenderLayer;
 
 // CAD 视图窗口：
 // - 负责 OpenGL 初始化与绘制
@@ -114,8 +115,10 @@ public:
     void setTheme(const AppThemeColors& theme);
 
     // 共享视口内的 CAM 可视化层入口；CAM 显示开关、展示快照与加工单元交互都由它承担。
-    // Phase 8: SimulationRenderLayer 可以与这三个层并列挂到同一视口。
     CamRenderLayer* camRenderLayer() const;
+
+    // 共享视口内的仿真可视化层入口；仿真状态由 Application 提供，这里只负责绘制。
+    SimulationRenderLayer* simulationRenderLayer() const;
 
     void setBackgroundGridVisible(bool visible);
 
@@ -403,6 +406,9 @@ private:
     // 绘制 CAM 可视化层的屏幕叠加（顺序编号与端面标签）。
     void renderCamScreenOverlays();
 
+    // 绘制仿真状态文字。
+    void renderSimulationOverlay();
+
     // 绘制选中/框选候选图元的叠加高亮（AutoCAD 风格）。
     void renderEntitySelectionOverlays();
 
@@ -593,6 +599,9 @@ private:
 
     // CAM 可视化层（共享同一视口）。
     std::unique_ptr<CamRenderLayer> m_camRenderLayer;
+
+    // 仿真可视化层（共享同一视口）。
+    std::unique_ptr<SimulationRenderLayer> m_simulationRenderLayer;
 
 
     // 当前主题颜色

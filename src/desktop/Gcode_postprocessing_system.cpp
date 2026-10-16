@@ -4,6 +4,7 @@
 #include "desktop/Gcode_postprocessing_system.h"
 
 #include "cad/view/rendering/CamRenderLayer.h"
+#include "cad/view/rendering/SimulationRenderLayer.h"
 #include "ui/dialogs/CadAppearanceSettingsDialog.h"
 #include "ui/dialogs/CadHelpDialog.h"
 #include "cad/items/CadItem.h"
@@ -2341,6 +2342,19 @@ void Gcode_postprocessing_system::initializeCamToolPanel()
     m_camToolBar->addWidget(m_camToolPanelWidget);
     addToolBar(Qt::TopToolBarArea, m_camToolBar);
 
+    // 仿真会话控制：定时器只负责按真实经过时间推进会话，仿真状态仍由 SimulationController 保存。
+    m_simulationTimer = new QTimer(this);
+    m_simulationTimer->setInterval(16);
+    connect(m_simulationTimer, &QTimer::timeout, this, [this]() { advanceSimulation(); });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::prepareSimulationRequested, this, [this]() { prepareSimulation(); });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::playSimulationRequested, this, [this]() { startSimulationPlayback(); });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::pauseSimulationRequested, this, [this]() { pauseSimulationPlayback(); });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::stepSimulationRequested, this, [this]() { stepSimulation(); });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::resetSimulationRequested, this, [this]() { resetSimulation(); });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::simulationSpeedChanged, this, [this](double speed) { setSimulationSpeed(speed); });
+    connect(m_camToolPanelWidget, &CamToolPanelWidget::simulationSeekRequested, this, [this](double progress) { seekSimulation(progress); });
+    m_camToolPanelWidget->setSimulationSpeed(m_simulation.speed());
+
     connect(m_camToolPanelWidget, &CamToolPanelWidget::exportGCodeRequested, this, [this]() { ui->action_File_Export_G->trigger(); });
     connect(m_camToolPanelWidget, &CamToolPanelWidget::recognizeRotaryTubeSectionRequested, this, [this]() { recognizeRotaryTubeSection(true); });
     connect(m_camToolPanelWidget, &CamToolPanelWidget::recognizeRotaryEndCutsRequested, this, [this]() { recognizeAllRotaryEndCuts(true); });
@@ -2518,10 +2532,12 @@ void Gcode_postprocessing_system::applyWorkspaceState()
         }
 
         ui->openGLWidget->camRenderLayer()->setVisualsVisible(false);
+        ui->openGLWidget->simulationRenderLayer()->setVisible(false);
     }
     else
     {
         ui->openGLWidget->camRenderLayer()->setVisualsVisible(m_camProcessVisualsVisible);
+        ui->openGLWidget->simulationRenderLayer()->setVisible(true);
     }
 
     ui->openGLWidget->refreshCommandPrompt();

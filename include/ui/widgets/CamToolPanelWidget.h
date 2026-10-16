@@ -11,6 +11,8 @@
 class QCheckBox;
 class QComboBox;
 class QFrame;
+class QLabel;
+class QSlider;
 class QTabWidget;
 class QToolButton;
 
@@ -42,6 +44,16 @@ public:
     void setRotaryEndCutsVisible(bool enabled);
     void setExcludedEntitiesDimmed(bool enabled);
 
+    // 仿真页显示状态；控件启用与状态文字由桌面层按仿真会话状态设置。
+    void setSimulationControlsEnabled(bool enabled);
+    void setSimulationPlaying(bool playing);
+    void setSimulationStateText(const QString& text);
+    void setSimulationMotionText(const QString& text);
+    void setSimulationMoveText(const QString& text);
+    void setSimulationAxisAlignmentText(const QString& text);
+    void setSimulationProgress(double progress);
+    void setSimulationSpeed(double speed);
+
 signals:
     void recognizeRotaryTubeSectionRequested();
     void recognizeRotaryEndCutsRequested();
@@ -59,6 +71,13 @@ signals:
     void processOrderVisibleChanged(bool enabled);
     void rotaryEndCutsVisibleChanged(bool enabled);
     void excludedEntitiesDimmedChanged(bool enabled);
+    void prepareSimulationRequested();
+    void playSimulationRequested();
+    void pauseSimulationRequested();
+    void stepSimulationRequested();
+    void resetSimulationRequested();
+    void simulationSpeedChanged(double speed);
+    void simulationSeekRequested(double progress);
 
 private:
     void buildUi();
@@ -76,6 +95,7 @@ private:
     QWidget* buildSimulationStage();
     QWidget* buildNcPostStage();
     QWidget* buildMachiningDisplayPanel();
+    QWidget* buildSimulationControlPanel();
 
 private:
     QTabWidget* m_stageTabs = nullptr;
@@ -91,7 +111,19 @@ private:
     QCheckBox* m_processOrderCheckBox = nullptr;
     QCheckBox* m_rotaryEndCutsCheckBox = nullptr;
     QCheckBox* m_excludedEntitiesDimmedCheckBox = nullptr;
+    QToolButton* m_prepareSimulationButton = nullptr;
+    QToolButton* m_playSimulationButton = nullptr;
+    QToolButton* m_pauseSimulationButton = nullptr;
+    QToolButton* m_stepSimulationButton = nullptr;
+    QToolButton* m_resetSimulationButton = nullptr;
+    QComboBox* m_simulationSpeedComboBox = nullptr;
+    QSlider* m_simulationProgressSlider = nullptr;
+    QLabel* m_simulationStateLabel = nullptr;
+    QLabel* m_simulationMotionLabel = nullptr;
+    QLabel* m_simulationMoveLabel = nullptr;
+    QLabel* m_simulationAxisLabel = nullptr;
     QVector<QFrame*> m_dividers;
     AppThemeColors m_theme = buildAppThemeColors(AppThemeMode::Light);
     bool m_updatingUi = false;
+    bool m_simulationControlsEnabled = false;
 };

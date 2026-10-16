@@ -50,6 +50,8 @@ void Gcode_postprocessing_system::invalidateCurrentProcessPlan()
     {
         // 计划失效后清除 CAM 展示快照，避免旧的顺序、箭头和排除状态继续显示。
         ui->openGLWidget->camRenderLayer()->clearPresentation();
+        // 仿真基于加工结果，计划失效后同样清除当前仿真会话，避免播放过期轨迹。
+        clearSimulation();
         BoundaryPerformanceTimer viewerTimer
             (m_boundaryAssignmentPerformanceReport != nullptr
                 ? &m_boundaryAssignmentPerformanceReport->viewerRefreshMs : nullptr);

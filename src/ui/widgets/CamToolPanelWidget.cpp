@@ -4,12 +4,16 @@
 
 #include "ui/widgets/ToolPanelStyle.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QSlider>
 #include <QTabWidget>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -107,35 +111,226 @@ QWidget* CamToolPanelWidget::buildSimulationStage()
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    QWidget* placeholderPanel = new QWidget(stage);
-    QVBoxLayout* placeholderLayout = new QVBoxLayout(placeholderPanel);
-    placeholderLayout->setContentsMargins(8, 8, 8, 8);
-    placeholderLayout->setSpacing(4);
-
-    // 本阶段只建立入口：轨迹仿真引擎属于后续阶段，此处不提供任何仿真实现。
-    QLabel* placeholderLabel = new QLabel
+    layout->addWidget
     (
-        QStringLiteral("轨迹仿真尚未实现。\n当前可在 CAM 工作区检查加工顺序、方向和刀路预览，"),
-        placeholderPanel
+        buildPanelFrame(QStringLiteral("仿真"), buildSimulationControlPanel(), 470, true),
+        0, Qt::AlignLeft | Qt::AlignTop
     );
-    placeholderLabel->setWordWrap(true);
-    QLabel* placeholderHint = new QLabel
-    (
-        QStringLiteral("实际仿真与空跑由后续阶段基于 MachineTrajectory 建立。"),
-        placeholderPanel
-    );
-    placeholderHint->setWordWrap(true);
-    QToolButton* placeholderButton = buildMachiningButton(placeholderPanel, QStringLiteral("仿真（后续阶段）"));
-    placeholderButton->setEnabled(false);
-
-    placeholderLayout->addWidget(placeholderLabel);
-    placeholderLayout->addWidget(placeholderHint);
-    placeholderLayout->addWidget(placeholderButton, 0, Qt::AlignLeft);
-    placeholderLayout->addStretch(1);
-
-    layout->addWidget(buildPanelFrame(QStringLiteral("仿真"), placeholderPanel, 460, true), 0, Qt::AlignLeft | Qt::AlignTop);
     layout->addStretch(1);
     return stage;
+}
+
+QWidget* CamToolPanelWidget::buildSimulationControlPanel()
+{
+    QWidget* panel = new QWidget(m_stageTabs);
+    QGridLayout* layout = new QGridLayout(panel);
+    layout->setContentsMargins(2, 6, 2, 2);
+    layout->setHorizontalSpacing(6);
+    layout->setVerticalSpacing(6);
+    panel->setMaximumWidth(470);
+
+    // 第一行：仿真会话控制。仿真状态与进度始终由 Application 的 SimulationController 保存。
+    QWidget* controlRow = new QWidget(panel);
+    QHBoxLayout* controlLayout = new QHBoxLayout(controlRow);
+    controlLayout->setContentsMargins(0, 0, 0, 0);
+    controlLayout->setSpacing(6);
+    m_prepareSimulationButton = buildMachiningButton(controlRow, QStringLiteral("准备仿真"));
+    m_playSimulationButton = buildMachiningButton(controlRow, QStringLiteral("播放"));
+    m_pauseSimulationButton = buildMachiningButton(controlRow, QStringLiteral("暂停"));
+    m_stepSimulationButton = buildMachiningButton(controlRow, QStringLiteral("单步"));
+    m_resetSimulationButton = buildMachiningButton(controlRow, QStringLiteral("复位"));
+    controlLayout->addWidget(m_prepareSimulationButton);
+    controlLayout->addWidget(m_playSimulationButton);
+    controlLayout->addWidget(m_pauseSimulationButton);
+    controlLayout->addWidget(m_stepSimulationButton);
+    controlLayout->addWidget(m_resetSimulationButton);
+    controlLayout->addStretch(1);
+    layout->addWidget(controlRow, 0, 0, 1, 2);
+
+    // 第二行：播放倍率。只是播放速度，不是真实进给率。
+    QLabel* speedLabel = new QLabel(QStringLiteral("速度"), panel);
+    speedLabel->setProperty("machiningFieldLabel", true);
+    m_simulationSpeedComboBox = new QComboBox(panel);
+    m_simulationSpeedComboBox->setEditable(false);
+    m_simulationSpeedComboBox->setFixedHeight(toolpanel::kComboHeight);
+    m_simulationSpeedComboBox->addItem(QStringLiteral("0.25×"), 0.25);
+    m_simulationSpeedComboBox->addItem(QStringLiteral("0.5×"), 0.5);
+    m_simulationSpeedComboBox->addItem(QStringLiteral("1×"), 1.0);
+    m_simulationSpeedComboBox->addItem(QStringLiteral("2×"), 2.0);
+    m_simulationSpeedComboBox->addItem(QStringLiteral("4×"), 4.0);
+    m_simulationSpeedComboBox->setCurrentIndex(2);
+    layout->addWidget(speedLabel, 1, 0);
+    layout->addWidget(m_simulationSpeedComboBox, 1, 1);
+
+    // 第三行：整体进度。滑块只负责用户操作，拖动结束后定位仿真会话。
+    m_simulationProgressSlider = new QSlider(Qt::Horizontal, panel);
+    m_simulationProgressSlider->setRange(0, 1000);
+    m_simulationProgressSlider->setValue(0);
+    m_simulationProgressSlider->setEnabled(false);
+    layout->addWidget(m_simulationProgressSlider, 2, 0, 1, 2);
+
+    // 第四行：状态文字。
+    m_simulationStateLabel = new QLabel(QStringLiteral("状态：未准备"), panel);
+    m_simulationMotionLabel = new QLabel(QStringLiteral("运动：-"), panel);
+    m_simulationMoveLabel = new QLabel(QStringLiteral("Move：0 / 0"), panel);
+    m_simulationAxisLabel = new QLabel(QStringLiteral("A：-"), panel);
+
+    const QList<QLabel*> statusLabels
+    {
+        m_simulationStateLabel,
+        m_simulationMotionLabel,
+        m_simulationMoveLabel,
+        m_simulationAxisLabel
+    };
+    for (QLabel* label : statusLabels)
+    {
+        label->setProperty("machiningValueLabel", true);
+    }
+
+    layout->addWidget(m_simulationStateLabel, 3, 0);
+    layout->addWidget(m_simulationMotionLabel, 3, 1);
+    layout->addWidget(m_simulationMoveLabel, 4, 0);
+    layout->addWidget(m_simulationAxisLabel, 4, 1);
+    layout->setColumnStretch(1, 1);
+    layout->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+
+    connect(m_prepareSimulationButton, &QToolButton::clicked, this,
+        [this]() { emit prepareSimulationRequested(); });
+    connect(m_playSimulationButton, &QToolButton::clicked, this,
+        [this]() { emit playSimulationRequested(); });
+    connect(m_pauseSimulationButton, &QToolButton::clicked, this,
+        [this]() { emit pauseSimulationRequested(); });
+    connect(m_stepSimulationButton, &QToolButton::clicked, this,
+        [this]() { emit stepSimulationRequested(); });
+    connect(m_resetSimulationButton, &QToolButton::clicked, this,
+        [this]() { emit resetSimulationRequested(); });
+    connect
+    (
+        m_simulationSpeedComboBox,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this](int index)
+        {
+            if (m_updatingUi || index < 0)
+            {
+                return;
+            }
+
+            emit simulationSpeedChanged(m_simulationSpeedComboBox->itemData(index).toDouble());
+        }
+    );
+    connect
+    (
+        m_simulationProgressSlider,
+        &QSlider::sliderReleased,
+        this,
+        [this]()
+        {
+            if (m_updatingUi)
+            {
+                return;
+            }
+
+            emit simulationSeekRequested
+                (static_cast<double>(m_simulationProgressSlider->value()) / 1000.0);
+        }
+    );
+
+    setSimulationControlsEnabled(false);
+    return panel;
+}
+
+void CamToolPanelWidget::setSimulationControlsEnabled(bool enabled)
+{
+    if (m_prepareSimulationButton == nullptr)
+    {
+        return;
+    }
+
+    m_simulationControlsEnabled = enabled;
+    m_playSimulationButton->setEnabled(enabled);
+    m_pauseSimulationButton->setEnabled(enabled);
+    m_stepSimulationButton->setEnabled(enabled);
+    m_resetSimulationButton->setEnabled(enabled);
+    m_simulationSpeedComboBox->setEnabled(enabled);
+    m_simulationProgressSlider->setEnabled(enabled);
+}
+
+void CamToolPanelWidget::setSimulationPlaying(bool playing)
+{
+    if (m_simulationProgressSlider == nullptr)
+    {
+        return;
+    }
+
+    // 播放期间进度由仿真会话驱动，用户拖动只在暂停时生效。
+    m_simulationProgressSlider->setEnabled(m_simulationControlsEnabled && !playing);
+}
+
+void CamToolPanelWidget::setSimulationStateText(const QString& text)
+{
+    if (m_simulationStateLabel != nullptr)
+    {
+        m_simulationStateLabel->setText(QStringLiteral("状态：%1").arg(text));
+    }
+}
+
+void CamToolPanelWidget::setSimulationMotionText(const QString& text)
+{
+    if (m_simulationMotionLabel != nullptr)
+    {
+        m_simulationMotionLabel->setText(QStringLiteral("运动：%1").arg(text));
+    }
+}
+
+void CamToolPanelWidget::setSimulationMoveText(const QString& text)
+{
+    if (m_simulationMoveLabel != nullptr)
+    {
+        m_simulationMoveLabel->setText(text);
+    }
+}
+
+void CamToolPanelWidget::setSimulationAxisAlignmentText(const QString& text)
+{
+    if (m_simulationAxisLabel != nullptr)
+    {
+        m_simulationAxisLabel->setText(text);
+    }
+}
+
+void CamToolPanelWidget::setSimulationProgress(double progress)
+{
+    if (m_simulationProgressSlider == nullptr)
+    {
+        return;
+    }
+
+    m_updatingUi = true;
+    m_simulationProgressSlider->setValue
+    (
+        static_cast<int>(std::clamp(progress, 0.0, 1.0) * 1000.0)
+    );
+    m_updatingUi = false;
+}
+
+void CamToolPanelWidget::setSimulationSpeed(double speed)
+{
+    if (m_simulationSpeedComboBox == nullptr)
+    {
+        return;
+    }
+
+    m_updatingUi = true;
+    for (int index = 0; index < m_simulationSpeedComboBox->count(); ++index)
+    {
+        if (std::abs(m_simulationSpeedComboBox->itemData(index).toDouble() - speed) < 1.0e-6)
+        {
+            m_simulationSpeedComboBox->setCurrentIndex(index);
+            break;
+        }
+    }
+    m_updatingUi = false;
 }
 
 QWidget* CamToolPanelWidget::buildNcPostStage()

@@ -72,6 +72,20 @@ GeometrySnapshot + ProcessPlan + DocumentProcessState + 加工配置
 
 导出不触发规划：没有加工计划时提示先完成 CAM Planning，计划或几何快照失效时提示重新 Planning；导出不排序、不修改 CAD、不重建快照、不修复加工状态。
 
+仿真同样只消费 CAM 结果：
+
+```text
+ProcessPlan
+→ 四轴 MachineTrajectory / 三轴既有结构化运动
+→ SimulationTrajectory
+→ SimulationController（播放会话）
+→ SimulationSnapshot
+→ SimulationRenderLayer
+→ 共享视口
+```
+
+仿真是归一化回放：不模拟真实机床时间，不重新规划，不修改 CAD 与加工状态，也不解析 G-code。计划失效时当前仿真会话被清除。
+
 ## 4. 加工单元形成
 
 ```text

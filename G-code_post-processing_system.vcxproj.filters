@@ -1172,6 +1172,18 @@
     <ClCompile Include="src\core\planning\PlanarProcessPlanBuilder.cpp">
       <Filter>Source Files\core\planning</Filter>
     </ClCompile>
+    <ClCompile Include="src\application\simulation\SimulationController.cpp">
+      <Filter>Source Files\application\simulation</Filter>
+    </ClCompile>
+    <ClCompile Include="src\application\simulation\SimulationTrajectoryAdapter.cpp">
+      <Filter>Source Files\application\simulation</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cad\view\rendering\SimulationRenderLayer.cpp">
+      <Filter>Source Files\cad\view\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\desktop\Gcode_postprocessing_system_SimulationActions.cpp">
+      <Filter>Source Files\desktop</Filter>
+    </ClCompile>
     <ClCompile Include="src\application\nc\NcProgramService.cpp">
       <Filter>Source Files\application\nc</Filter>
     </ClCompile>
@@ -1268,7 +1280,21 @@
     <ClInclude Include="include\application\export\GCodeFileWriter.h">
       <Filter>Header Files\application\export</Filter>
     </ClInclude>
+    <ClInclude Include="include\application\simulation\SimulationController.h">
+      <Filter>Header Files\application\simulation</Filter>
+    </ClInclude>
+    <ClInclude Include="include\application\simulation\SimulationTrajectoryAdapter.h">
+      <Filter>Header Files\application\simulation</Filter>
+    </ClInclude>
+    <ClInclude Include="include\application\simulation\SimulationTypes.h">
+      <Filter>Header Files\application\simulation</Filter>
+    </ClInclude>
     <ClInclude Include="include\application\nc\GeometrySnapshotNcInputBuilder.h">
+      <Filter>Header Files\application\nc</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cad\view\rendering\SimulationRenderLayer.h">
+      <Filter>Header Files\cad\view\rendering</Filter>
+    </ClInclude>
       <Filter>Header Files\application\nc</Filter>
     </ClInclude>
     <ClInclude Include="include\application\geometry\GeometrySamplingPolicy.h">

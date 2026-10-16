@@ -119,6 +119,8 @@ CAD 几何编辑与这两类加工状态编辑按实际发生顺序共同 Undo/R
 
 展示快照随有效计划更新或清除：计划成功后桌面层构建快照并交给 `CamRenderLayer` 持有，计划失效时清除，避免旧顺序、箭头和排除状态继续显示。展示快照仅反映业务状态，不承担计划或加工输入的持久化职责，也不进入 `CamJob`。
 
+仿真会话同样是临时派生状态：`SimulationController` 只在桌面层“准备仿真”时加载一次运动结果，播放进度、播放倍率与当前位姿都只存在于本次会话内；计划失效时清除会话，避免继续播放过期轨迹。`MachineTrajectory` 与 `NcProgram` 仍不进入 `CamJob` 的长期成员。
+
 ## 相关需求
 
 MACH-041、MACH-042、MACH-043、PROCESS-018、PROCESS-019、PROCESS-021、PROCESS-022、PROCESS-023、EDIT-029、EDIT-030、EDIT-031、EDIT-033。

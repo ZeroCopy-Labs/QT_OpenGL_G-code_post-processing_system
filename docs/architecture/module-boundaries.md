@@ -95,6 +95,8 @@ CAD 与外部格式数据应在进入 Core 前完成捕获和适配。Core 计�
 
 共享视口用一个 `CadViewer` 承载三个渲染层。`CadRenderLayer` 只绘制 CAD 几何并执行上层给出的中立显示覆盖；`SelectionRenderLayer` 只绘制 CAD 选中、框选、手柄与吸附反馈；`CamRenderLayer` 只读取加工状态并绘制加工顺序、方向、排除淡化、旋转端面与预览，同时负责加工单元命中与选择扩展。
 
+共享视口内并列第四个层 `SimulationRenderLayer`：它只消费 `SimulationController` 提供的仿真轨迹与每帧展示快照，绘制当前机床位置、当前运动、已完成轨迹与仿真状态文字。仿真会话属于 Application（`application/simulation`），只读取当前有效的加工计划与既有运动结果，不持有 `CamJob`、不修改加工状态，也不依赖 `CadDocument` / `CadItem`；三轴当前以既有结构化 NC 运动作为桥接输入。
+
 图元选择通过稳定图元身份映射到加工单元选择，一个加工单元只显示一个顺序编号。加工单元身份和序列由 Core 与 Application 提供，渲染层不自行生成或保存这些业务事实，也不修改加工状态：`CamRenderLayer` 只发出交互请求，由桌面层修改 `CamJob` 与 `ProcessState`。GPU 缓存键、临时选择状态、CAM 显示开关与旋转预览参数仅在 Viewer 生命周期内使用；显示偏好的持久化仍由桌面层设置负责。Phase 8 的 SimulationRenderLayer 可以与这三层并列挂到同一视口。
 
 ## 6. 外部格式边界

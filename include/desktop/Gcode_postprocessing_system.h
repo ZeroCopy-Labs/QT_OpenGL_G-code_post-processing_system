@@ -16,11 +16,14 @@
 #include "infrastructure/config/RecentDocumentStore.h"
 #include "core/planning/ProcessPlan.h"
 #include "application/cam/CamJob.h"
+#include "application/simulation/SimulationController.h"
 
 
 #include <QtWidgets/QMainWindow>
 #include <QtGlobal>
+#include <QElapsedTimer>
 #include <QMap>
+#include <QTimer>
 
 #include <cstdint>
 #include <optional>
@@ -33,6 +36,7 @@ QT_END_NAMESPACE
 
 class QAction;
 class QDockWidget;
+class QTimer;
 class QMenu;
 class QTabBar;
 class QToolBar;
@@ -241,6 +245,19 @@ private:
     // 确保 CamJob 持有与当前文档 revision 一致的几何快照；
     // 仅当快照缺失或过期时捕获并编译，不建立全局快照管理器。
     bool ensureCurrentGeometrySnapshot(const OperationContext& context);
+
+    // 仿真：准备会话、播放控制与状态同步。
+    // 仿真只读取当前有效的加工计划与既有运动结果，不修改 CAD / CAM 状态。
+    bool prepareSimulation();
+    void clearSimulation();
+    void startSimulationPlayback();
+    void pauseSimulationPlayback();
+    void stepSimulation();
+    void resetSimulation();
+    void setSimulationSpeed(double speed);
+    void seekSimulation(double progress);
+    void advanceSimulation();
+    void publishSimulationSnapshot(bool announceStatus);
     void handleProcessUnitMoveToBackRequest
     (
         const QVector<cadcam::planning::ProcessUnitKey>& selectedUnitKeys,
@@ -296,6 +313,11 @@ private:
     GProfile m_activeProfile = GProfile::createDefaultLaserProfile();
     // 当前 CAM 加工任务：拥有加工状态、加工设置和当前有效的加工计划。
     cadcam::cam::CamJob m_camJob;
+    // 当前仿真播放会话：只保存本次仿真的轨迹与播放进度。
+    SimulationController m_simulation;
+    // 仿真播放定时器，按真实经过时间推进归一化播放。
+    QTimer* m_simulationTimer = nullptr;
+    QElapsedTimer m_simulationFrameTimer;
 
     BoundaryAssignmentPerformanceReport* m_boundaryAssignmentPerformanceReport = nullptr;
     QString m_currentLayerName = QStringLiteral("0");
