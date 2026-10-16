@@ -1,4 +1,4 @@
-﻿// CadEditer 头文件
+// CadEditer 头文件
 // 声明 CadEditer 模块，对外暴露当前组件的核心类型、接口和协作边界。
 // 编辑器模块，负责绘图创建、实体修改以及 Undo/Redo 命令栈管理。
 #pragma once
@@ -11,8 +11,8 @@
 #include <QVector>
 #include <QVector3D>
 
-#include "cad/view/rendering/CadProcessVisualUtils.h"
-#include "application/process/DocumentProcessState.h"
+#include "cad/editing/CadEditCompanion.h"
+#include "cad/view/rendering/CadSelectionHandle.h"
 
 class CadDocument;
 class CadItem;
@@ -34,7 +34,12 @@ public:
     // 绑定当前编辑目标文档
     // @param document 文档对象指针
     void setDocument(CadDocument* document);
-    void setProcessState(cadcam::process::DocumentProcessState* processState);
+
+    // 注入编辑伴随工厂。
+    // 应用层借此把自己的状态同步并入 CAD 编辑的同一个 Undo / Redo 历史项；
+    // CadEditer 只按执行/撤销时机回调伴随器，不知道它维护什么状态。
+    // @param factory 工厂函数，传入 nullptr 表示不需要伴随同步
+    void setEditCompanionFactory(CadEditCompanionFactory factory);
 
     // 清空 Undo / Redo 历史
     void clearHistory();
@@ -173,6 +178,18 @@ public:
     };
 
 private:
+    // 为一次涉及 sourceEntityIds 的编辑创建应用层伴随器；未注入工厂时返回空。
+    std::unique_ptr<CadEditCompanion> createEditCompanion
+    (
+        const std::vector<cadcam::geometry::EntityId>& sourceEntityIds
+    ) const;
+
+    // 为替换类操作创建伴随器：从源图元收集稳定身份后转交工厂。
+    std::unique_ptr<CadEditCompanion> createReplaceEditCompanion
+    (
+        const QVector<CadItem*>& sourceItems
+    ) const;
+
     // 执行命令并压入 Undo 栈
     // @param command 待执行的命令对象
     // @return 如果执行成功返回 true，否则返回 false
@@ -220,7 +237,9 @@ private:
 private:
     // 当前绑定的文档对象
     CadDocument* m_document = nullptr;
-    cadcam::process::DocumentProcessState* m_processState = nullptr;
+
+    // 应用层注入的编辑伴随工厂（可选）
+    CadEditCompanionFactory m_editCompanionFactory;
 
     // Move 命令当前锁定的目标实体
     CadItem* m_moveTarget = nullptr;

@@ -5,6 +5,7 @@
 
 #include "application/process/DocumentProcessState.h"
 #include "application/process/ProcessPresentationSnapshot.h"
+#include "cad/view/rendering/CadSelectionHandle.h"
 
 class CadItem;
 
@@ -26,22 +27,6 @@ enum class CadProcessExclusionVisual
 {
     None,
     PlannedExclusion
-};
-
-enum class CadSelectionHandleShape
-{
-    RoundPoint,
-    Triangle
-};
-
-struct CadSelectionHandleInfo
-{
-    QVector3D position;
-    bool isBasePoint = false;
-    bool editable = false;
-    int pointIndex = -1;
-    CadSelectionHandleShape shape = CadSelectionHandleShape::RoundPoint;
-    QVector3D direction;
 };
 
 bool isProcessVisualizable(const CadItem* item);

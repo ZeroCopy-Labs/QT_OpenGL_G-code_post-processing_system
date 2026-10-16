@@ -625,7 +625,13 @@
     <ClCompile Include="src\application\planning\DocumentProcessPlanningAdapter.cpp">
       <Filter>Source Files\application\planning</Filter>
     </ClCompile>
+    <ClCompile Include="src\application\process\ProcessStateEditSync.cpp">
+      <Filter>Source Files\application\process</Filter>
+    </ClCompile>
     <ClCompile Include="src\application\process\DocumentProcessState.cpp">
+      <Filter>Source Files\application\process</Filter>
+    </ClCompile>
+    <ClCompile Include="src\application\process\ProcessStateEditSync.cpp">
       <Filter>Source Files\application\process</Filter>
     </ClCompile>
     <ClCompile Include="src\application\process\ProcessPresentationSnapshot.cpp">
@@ -839,6 +845,15 @@
     </ClInclude>
     <ClInclude Include="include\cad\editing\CadEditer.h">
       <Filter>Header Files\cad\editing</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cad\editing\CadEditCompanion.h">
+      <Filter>Header Files\cad\editing</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cad\view\rendering\CadSelectionHandle.h">
+      <Filter>Header Files\cad\view\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="include\application\process\ProcessStateEditSync.h">
+      <Filter>Header Files\application\process</Filter>
     </ClInclude>
     <ClInclude Include="include\infrastructure\config\GProfile.h">
       <Filter>Header Files\infrastructure\config</Filter>

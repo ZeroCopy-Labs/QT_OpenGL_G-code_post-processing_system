@@ -34,7 +34,9 @@ Compatibility 仅位于遗留对象转换边界。新业务事实进入 Core 后
 
 加工状态编辑由 Application 保存修改前后值并构造执行、撤销回调，随后提交给 CAD 层的通用历史入口。
 CAD 编辑和加工状态编辑共用一个 Undo/Redo 栈，因此按用户操作发生顺序统一撤销和重做；CAD 层不定义加工单元排序或遍历专用命令。
-当前删除、批量删除和替换命令仍通过 `DocumentProcessState` 恢复逐图元加工状态和完整单元序列，该耦合留待后续独立迁移。
+删除、批量删除和替换命令本身只维护 CAD 文档：`CadEditer` 通过业务无关的编辑伴随工厂，把本次编辑涉及和新增的图元身份交给 Application。
+Application 的 `ProcessStateEditSync` 在同一历史项内完成加工状态清理和加工单元序列恢复，`CadEditer` 不知道 `DocumentProcessState` 的存在。
+`CadViewer`、CAD 渲染器和 `GGenerator` 仍直接依赖 `DocumentProcessState` 与 `ProcessPresentationSnapshot`，这部分留待后续渲染层和导出阶段迁移。
 
 ## 3. Core 边界
 

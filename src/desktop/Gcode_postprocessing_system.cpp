@@ -7,6 +7,7 @@
 #include "cad/items/CadItem.h"
 #include "ui/dialogs/GProfileDialog.h"
 #include "ui/dialogs/GProfileManagerDialog.h"
+#include "application/process/ProcessStateEditSync.h"
 #include "infrastructure/config/MachiningParameterStore.h"
 #include "infrastructure/config/GProfilePathStore.h"
 #include "core/machine/MachineTrajectory.h"
@@ -350,7 +351,15 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
     }
 
     m_editer.setDocument(&m_document);
-    m_editer.setProcessState(&m_processState);
+    // CAD 删除/替换引起的图元变化由应用层同步到加工状态，并与 CAD 改动共享同一个历史项。
+    m_editer.setEditCompanionFactory
+    (
+        [this](const std::vector<cadcam::geometry::EntityId>& sourceEntityIds)
+        {
+            return std::make_unique<cadcam::process::ProcessStateEditSync>
+                (m_processState, sourceEntityIds);
+        }
+    );
     ui->openGLWidget->setEditer(&m_editer);
     ui->openGLWidget->setDocument(&m_document);
     ui->openGLWidget->setDocumentProcessState(&m_processState);

@@ -8,9 +8,10 @@
 
 ## 生产入口
 
-- 图元加工设置由桌面命令和 `CadEditer` 写入当前 `DocumentProcessState`。
+- 图元加工设置由桌面命令写入当前 `DocumentProcessState`；`CadEditer` 只负责 CAD 文档编辑，不再持有加工状态。
 - 方管截面由手动参数设置或截面识别命令写入主窗口持有的 `RotaryTubeSectionModel`。
 - 内部线自动清理通过内缩窗口选择并物理删除图元，删除进入统一撤销栈。
+- 图元删除和替换由桌面层注入的 `ProcessStateEditSync` 在同一历史项内清理加工状态并恢复加工单元序列。
 - 文件导入、删除、复制、Undo/Redo 和几何编辑通过文档及编辑命令维护相关状态。
 - 排序入口通过 `ProcessPlanningService` 捕获当前文档和加工状态，形成规划输入。
 
@@ -86,8 +87,8 @@ ProcessPlan 中的加工单元顺序
 - 目标已在选中范围末位、选中范围不连续或目标不在范围内时不修改状态，也不进入撤销栈。
 - 单元遍历覆盖按稳定 `ProcessUnitKey` 保存成员执行顺序、每成员方向和起点参数；不向成员写入重复的组方向状态。
 - 删除图元时移除包含该图元的旧单元身份；清空文档时清空加工单元序列。
-- 删除、批量删除和替换命令保存操作前、操作后的完整单元序列；Undo 恢复操作前序列，Redo 恢复操作后序列。
-- 上述命令将逐图元状态和单元序列恢复放在同一个批处理中，一次命令最多推进一次加工状态 revision。
+- 删除、批量删除和替换操作由应用层 `ProcessStateEditSync` 保存操作前、操作后的完整单元序列；Undo 恢复操作前序列，Redo 恢复操作后序列。
+- 上述同步与 CAD 改动在同一个历史项内完成，逐图元状态和单元序列恢复共用一个批处理，一次命令最多推进一次加工状态 revision。
 - 主窗口监听文档变化；当前计划 revision 与文档或加工状态不一致时立即清除计划和展示。
 - 方管截面一经识别或手动设置即持续有效，文档几何变化不会使截面失效；排序和轨迹继续使用当前截面参数，导出解算实际失败时再报错提示用户检查或重新设置截面。
 - 用户截面中心变化会同步截面边界，并清除依赖截面的当前计划和展示。
@@ -120,11 +121,13 @@ ProcessPlan 中的加工单元顺序
 
 - `include/application/process/DocumentProcessState.h`：定义逐图元加工输入、分析状态和 revision 接口。
 - `src/application/process/DocumentProcessState.cpp`：实现状态去默认值、批处理和 revision 推进。
+- `include/application/process/ProcessStateEditSync.h`：CAD 删除/替换时在应用层同步加工状态和加工单元序列的编辑伴随器。
+- `include/cad/editing/CadEditCompanion.h`：CAD 层业务无关的编辑伴随接口，只转交图元身份。
 - `include/desktop/Gcode_postprocessing_system.h`：拥有当前文档、截面、加工状态、计划和展示快照。
 - `src/desktop/Gcode_postprocessing_system_FileActions.cpp`：处理导入时的状态清理和自动后处理。
 - `src/desktop/Gcode_postprocessing_system_BoundaryActions.cpp`：写入断面与端面相关的加工状态。
 - `src/desktop/Gcode_postprocessing_system_ProcessUnitActions.cpp`：写入加工单元序列与遍历覆盖，并使派生计划失效。
-- `src/cad/editing/CadEditer_CommandActions.cpp`：块内移尾和整组反向时保存操作前后状态，并通过 Undo/Redo 恢复。
+- `src/cad/editing/CadEditer_CommandActions.cpp`：只维护 CAD 文档的删除与替换命令，并按执行/撤销时机回调应用层伴随器。
 - `src/application/planning/DocumentProcessPlanningAdapter.cpp`：将文档与加工状态捕获为核心规划输入。
 
 ## 当前实现差异

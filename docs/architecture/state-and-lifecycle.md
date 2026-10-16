@@ -52,7 +52,7 @@ Core 根据统一加工路径及连续关系形成 `ProcessUnit` 集合。每个
 
 加工单元块内移尾和整组反向由 Application 保存完整修改前后状态，再以通用回调命令进入 `CadEditer` 的统一历史栈。
 CAD 几何编辑与这两类加工状态编辑按实际发生顺序共同 Undo/Redo。回调应用成功后才迁移历史项；执行、撤销或重做失败时，命令保留在原栈，不产生跨栈迁移。
-删除、批量删除和替换命令当前仍在 CAD 命令内部保存并恢复相关 `DocumentProcessState`，本阶段未改变其生命周期。
+删除、批量删除和替换命令只在 CAD 命令内部维护 `CadDocument`；加工状态由 Application 的 `ProcessStateEditSync` 在同一历史项内同步，因此逐图元状态和加工单元序列的保存与恢复位置改到 Application 层，生命周期语义不变。
 
 ## 5. 派生结果与失效关系
 

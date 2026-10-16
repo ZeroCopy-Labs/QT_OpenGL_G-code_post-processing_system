@@ -7,6 +7,7 @@
 
 #include "cad/document/CadDocument.h"
 #include "cad/items/CadItem.h"
+#include "cad/editing/CadEditCompanion.h"
 #include "cad/editing/DrawStateMachine.h"
 
 // 析构编辑器对象
@@ -42,9 +43,24 @@ void CadEditer::cancelTransientCommand()
     m_gripPointIndex = -1;
 }
 
-void CadEditer::setProcessState(cadcam::process::DocumentProcessState* processState)
+void CadEditer::setEditCompanionFactory(CadEditCompanionFactory factory)
 {
-    m_processState = processState;
+    m_editCompanionFactory = std::move(factory);
+}
+
+// 为一次编辑创建应用层伴随器。
+// CadEditer 只负责转交涉及的图元身份，不解释伴随器的具体状态。
+std::unique_ptr<CadEditCompanion> CadEditer::createEditCompanion
+(
+    const std::vector<cadcam::geometry::EntityId>& sourceEntityIds
+) const
+{
+    if (m_editCompanionFactory == nullptr)
+    {
+        return nullptr;
+    }
+
+    return m_editCompanionFactory(sourceEntityIds);
 }
 
 // 查询是否可以撤销
