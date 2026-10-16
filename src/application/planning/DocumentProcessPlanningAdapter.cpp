@@ -1,14 +1,12 @@
 #include "application/planning/DocumentProcessPlanningAdapter.h"
 
-#include "cad/document/CadDocument.h"
-#include "application/geometry/DocumentGeometrySnapshotBuilder.h"
+#include "application/geometry/GeometrySamplingPolicy.h"
 #include "application/tasks/TaskContext.h"
+#include "application/topology/GeometrySnapshotTopologyAdapter.h"
 #include "core/geometry/GeometryCompiler.h"
-#include "drw_entities.h"
-
-#include <QThread>
 
 #include <cmath>
+#include <utility>
 
 namespace
 {
@@ -43,75 +41,6 @@ namespace
         return diagnostic;
     }
 
-    cadcam::geometry::SamplingPolicy productionSamplingPolicy(int dxfType)
-    {
-        cadcam::geometry::SamplingPolicy policy;
-        policy.chordTolerance = 0.0;
-        switch (static_cast<DRW::ETYPE>(dxfType))
-        {
-        case DRW::ETYPE::CIRCLE:
-            policy.minimumSegments = 128;
-            policy.fullTurnSegments = 128;
-            break;
-        case DRW::ETYPE::ARC:
-            policy.minimumSegments = 16;
-            policy.fullTurnSegments = 128;
-            break;
-        case DRW::ETYPE::ELLIPSE:
-            policy.minimumSegments = 16;
-            policy.fullTurnSegments = 128;
-            break;
-        case DRW::ETYPE::POLYLINE:
-        case DRW::ETYPE::LWPOLYLINE:
-            policy.minimumSegments = 1;
-            policy.minimumBulgeSegments = 4;
-            policy.fullTurnSegments = 128;
-            break;
-        default:
-            policy.minimumSegments = 1;
-            break;
-        }
-        return policy;
-    }
-
-    cadcam::geometry::SamplingPolicy trajectorySamplingPolicy(int dxfType)
-    {
-        cadcam::geometry::SamplingPolicy policy =
-            productionSamplingPolicy(dxfType);
-        if (static_cast<DRW::ETYPE>(dxfType) == DRW::ETYPE::ARC)
-        {
-            policy.minimumSegments = 8;
-            policy.maximumAngularStep =
-                5.0 * 6.28318530717958647692 / 360.0;
-        }
-        return policy;
-    }
-
-    bool supportsProcessPath(SourceGeometryKind kind)
-    {
-        return kind == SourceGeometryKind::Line
-            || kind == SourceGeometryKind::Arc
-            || kind == SourceGeometryKind::Circle
-            || kind == SourceGeometryKind::Ellipse
-            || kind == SourceGeometryKind::Polyline
-            || kind == SourceGeometryKind::Spline;
-    }
-
-    bool hasUsablePath(const cadcam::geometry::Path3D& path, double minimumEdgeLength)
-    {
-        if (path.vertices.size() < 2U) return false;
-        for (std::size_t index = 1; index < path.vertices.size(); ++index)
-        {
-            const auto& left = path.vertices[index - 1U].position;
-            const auto& right = path.vertices[index].position;
-            const double dx = right.x - left.x;
-            const double dy = right.y - left.y;
-            const double dz = right.z - left.z;
-            if (std::sqrt(dx * dx + dy * dy + dz * dz) > minimumEdgeLength) return true;
-        }
-        return false;
-    }
-
     std::optional<double> effectiveStartParameter
     (
         const std::optional<double>& requestedStartParameter,
@@ -127,12 +56,54 @@ namespace
         }
         return std::nullopt;
     }
+
+    // 计划用路径：
+    // - 没有手动起点时直接使用快照路径（快照路径本身就是按同类型生产策略编译的结果）；
+    // - 有手动起点时按快照条目自带的采样策略从快照内的源几何重新编译，
+    //   因为起点只影响闭合几何的采样起点，而快照只描述 CAD 几何。
+    // 两种情况都不读取 CadDocument。
+    OperationResult<cadcam::geometry::Path3D> resolvePlanningPath
+    (
+        const GeometrySnapshotEntry& entry,
+        const std::optional<double>& startParameter,
+        const OperationContext& context
+    )
+    {
+        using namespace cadcam;
+        OperationResult<geometry::Path3D> result;
+
+        if (!startParameter.has_value())
+        {
+            if (entry.path.has_value())
+            {
+                result.status = OperationStatus::Success;
+                result.value = entry.path;
+                return result;
+            }
+            result.status = entry.status == OperationStatus::Success
+                ? OperationStatus::Failed : entry.status;
+            result.diagnostics = entry.diagnostics;
+            return result;
+        }
+
+        if (!entry.sourceEntity.has_value())
+        {
+            result.status = OperationStatus::Failed;
+            result.diagnostics = entry.diagnostics;
+            return result;
+        }
+
+        geometry::PathCompileOptions options;
+        options.startParameter = startParameter;
+        geometry::GeometryCompiler compiler;
+        return compiler.compile(*entry.sourceEntity, entry.samplingPolicy, options, context);
+    }
 }
 
 OperationResult<cadcam::planning::PlanarProcessPlanningInput>
 DocumentProcessPlanningAdapter::capturePlanar
 (
-    CadDocument& document,
+    const GeometrySnapshot& snapshot,
     const cadcam::process::DocumentProcessState& processState,
     cadcam::planning::ProcessSortIntent sortIntent,
     const OperationContext& context
@@ -140,34 +111,24 @@ DocumentProcessPlanningAdapter::capturePlanar
 {
     using namespace cadcam;
     OperationResult<planning::PlanarProcessPlanningInput> result;
-    const std::uint64_t contentRevision = document.contentRevision();
+    const std::uint64_t contentRevision = snapshot.contentRevision;
     const std::uint64_t stateRevision = processState.revision();
-    if (QThread::currentThread() != document.thread() || contentRevision == 0U)
+    if (contentRevision == 0U)
     {
         result.status = OperationStatus::InvalidInput;
         result.addDiagnostic(captureDiagnostic(DiagnosticCode::PlanarPlanningInputInvalid,
-            QStringLiteral("三轴加工计划输入必须在文档线程捕获。"), context,
+            QStringLiteral("三轴加工计划输入需要有效的几何快照。"), context,
             contentRevision, stateRevision));
-        return result;
-    }
-
-    DocumentGeometrySnapshotBuilder snapshotBuilder;
-    auto snapshot = snapshotBuilder.capture(document, context);
-    result.mergeDiagnostics(snapshot);
-    if (!snapshot.succeeded() || !snapshot.value.has_value())
-    {
-        result.status = snapshot.status;
         return result;
     }
 
     planning::PlanarProcessPlanningInput input;
     input.contentRevision = contentRevision;
     input.processStateRevision = stateRevision;
-    input.entities.reserve(snapshot.value->entries.size());
-    geometry::GeometryCompiler compiler;
+    input.entities.reserve(snapshot.entries.size());
     const bool rebuildSequence =
         sortIntent == planning::ProcessSortIntent::RebuildSequence;
-    for (const GeometrySourceEntry& entry : snapshot.value->entries)
+    for (const GeometrySnapshotEntry& entry : snapshot.entries)
     {
         planning::PlanarPlanningEntity entity;
         entity.entityId = entry.attributes.entityId;
@@ -183,10 +144,7 @@ DocumentProcessPlanningAdapter::capturePlanar
         if (entry.sourceEntity.has_value())
         {
             entity.sourceEntity = *entry.sourceEntity;
-            geometry::PathCompileOptions options;
-            options.startParameter = entity.startParameter;
-            auto path = compiler.compile(entity.sourceEntity,
-                productionSamplingPolicy(entry.attributes.originalDxfType), options, context);
+            auto path = resolvePlanningPath(entry, entity.startParameter, context);
             if (path.succeeded() && path.value.has_value())
             {
                 entity.path = std::move(*path.value);
@@ -203,11 +161,11 @@ DocumentProcessPlanningAdapter::capturePlanar
         input.entities.push_back(std::move(entity));
     }
 
-    if (document.contentRevision() != contentRevision || processState.revision() != stateRevision)
+    if (processState.revision() != stateRevision)
     {
         result.status = OperationStatus::Conflict;
         result.addDiagnostic(captureDiagnostic(DiagnosticCode::ProcessStateRevisionMismatch,
-            QStringLiteral("文档或加工状态在三轴计划输入捕获期间已变更。"), context,
+            QStringLiteral("加工状态在三轴计划输入捕获期间已变更。"), context,
             contentRevision, stateRevision));
         return result;
     }
@@ -219,7 +177,7 @@ DocumentProcessPlanningAdapter::capturePlanar
 OperationResult<cadcam::planning::ProcessPlanningInput>
 DocumentProcessPlanningAdapter::captureRotary
 (
-    CadDocument& document,
+    const GeometrySnapshot& snapshot,
     const cadcam::process::DocumentProcessState& processState,
     const std::optional<cadcam::machining::TubeSectionModel>& tubeSection,
     cadcam::planning::ProcessSortIntent sortIntent,
@@ -230,23 +188,14 @@ DocumentProcessPlanningAdapter::captureRotary
 {
     using namespace cadcam;
     OperationResult<planning::ProcessPlanningInput> result;
-    const std::uint64_t contentRevision = document.contentRevision();
+    const std::uint64_t contentRevision = snapshot.contentRevision;
     const std::uint64_t stateRevision = processState.revision();
-    if (QThread::currentThread() != document.thread() || contentRevision == 0U)
+    if (contentRevision == 0U)
     {
         result.status = OperationStatus::InvalidInput;
         result.addDiagnostic(captureDiagnostic(DiagnosticCode::ProcessPlanningInputInvalid,
-            QStringLiteral("四轴加工计划输入必须在文档线程捕获。"), context,
+            QStringLiteral("四轴加工计划输入需要有效的几何快照。"), context,
             contentRevision, stateRevision));
-        return result;
-    }
-
-    DocumentGeometrySnapshotBuilder snapshotBuilder;
-    auto snapshot = snapshotBuilder.capture(document, context);
-    result.mergeDiagnostics(snapshot);
-    if (!snapshot.succeeded() || !snapshot.value.has_value())
-    {
-        result.status = snapshot.status;
         return result;
     }
 
@@ -262,11 +211,10 @@ DocumentProcessPlanningAdapter::captureRotary
             { tubeSection->geometry.centerY, tubeSection->geometry.centerZ };
     }
     input.topologyInput.contentRevision = contentRevision;
-    input.entities.reserve(snapshot.value->entries.size());
-    geometry::GeometryCompiler compiler;
+    input.entities.reserve(snapshot.entries.size());
     const bool rebuildSequence =
         sortIntent == planning::ProcessSortIntent::RebuildSequence;
-    for (const GeometrySourceEntry& entry : snapshot.value->entries)
+    for (const GeometrySnapshotEntry& entry : snapshot.entries)
     {
         planning::PlanningEntity entity;
         entity.entityId = entry.attributes.entityId;
@@ -284,45 +232,33 @@ DocumentProcessPlanningAdapter::captureRotary
             ? std::nullopt : state.overrideData.startParameter;
         entity.manualDirectionPreference = state.overrideData.direction;
         entity.manualStartParameter = state.overrideData.startParameter;
+        // 轨迹执行继续使用按图元类型选择的轨迹采样策略。
+        entity.executionSamplingPolicy =
+            geometry::trajectoryGeometrySamplingPolicy(entry.attributes.originalDxfType);
 
         if (entry.sourceEntity.has_value())
         {
             entity.sourceEntity = *entry.sourceEntity;
-            geometry::PathCompileOptions options;
-            options.startParameter = entity.startParameter;
-            geometry::SamplingPolicy pathPolicy =
-                productionSamplingPolicy(entry.attributes.originalDxfType);
-            entity.executionSamplingPolicy =
-                trajectorySamplingPolicy
-                    (entry.attributes.originalDxfType);
-            auto path = compiler.compile(*entry.sourceEntity, pathPolicy, options, context);
+            auto path = resolvePlanningPath(entry, entity.startParameter, context);
             if (path.succeeded() && path.value.has_value())
             {
                 entity.path = std::move(*path.value);
-                if (supportsProcessPath(entity.sourceKind)
-                    && hasUsablePath(entity.path, topologyTolerance.minimumEdgeLength))
-                {
-                    auto topologyPath = compiler.compile
-                        (*entry.sourceEntity, pathPolicy, options, context);
-                    topology::TopologyPathRecord record;
-                    record.sourceIndex = entity.sourceIndex;
-                    record.entityId = entity.entityId;
-                    record.sourceKind = entity.sourceKind;
-                    record.semanticallyClosed = entity.path.closed;
-                    const geometry::Path3D& sourcePath =
-                        topologyPath.succeeded() && topologyPath.value.has_value()
-                            ? *topologyPath.value
-                            : entity.path;
-                    record.points.reserve(sourcePath.vertices.size());
-                    for (const auto& vertex : sourcePath.vertices)
-                        record.points.push_back(vertex.position);
-                    input.topologyInput.records.push_back(std::move(record));
-                }
             }
             else result.mergeDiagnostics(path);
         }
         input.entities.push_back(std::move(entity));
     }
+
+    // 拓扑输入由几何快照统一转换，不再从 CAD 图元重新编译几何。
+    auto topologyInput = GeometrySnapshotTopologyAdapter().convert
+        (snapshot, {}, topologyTolerance, context);
+    result.mergeDiagnostics(topologyInput);
+    if (!topologyInput.succeeded() || !topologyInput.value.has_value())
+    {
+        result.status = topologyInput.status;
+        return result;
+    }
+    input.topologyInput = std::move(*topologyInput.value);
 
     TaskContext taskContext;
     taskContext.operationContext = context;
@@ -337,11 +273,11 @@ DocumentProcessPlanningAdapter::captureRotary
     topologyStorage = std::move(*topologyResult.value);
     input.topology = &topologyStorage;
 
-    if (document.contentRevision() != contentRevision || processState.revision() != stateRevision)
+    if (processState.revision() != stateRevision)
     {
         result.status = OperationStatus::Conflict;
         result.addDiagnostic(captureDiagnostic(DiagnosticCode::ProcessStateRevisionMismatch,
-            QStringLiteral("文档或加工状态在四轴计划输入捕获期间已变更。"), context,
+            QStringLiteral("加工状态在四轴计划输入捕获期间已变更。"), context,
             contentRevision, stateRevision));
         return result;
     }

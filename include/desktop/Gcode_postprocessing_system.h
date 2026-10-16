@@ -238,6 +238,9 @@ private:
         (const RotaryBoundaryOperationGeometry& geometry);
     void invalidateProcessOrdersAfterEndCutChange();
     void invalidateCurrentProcessPlan();
+    // 确保 CamJob 持有与当前文档 revision 一致的几何快照；
+    // 仅当快照缺失或过期时捕获并编译，不建立全局快照管理器。
+    bool ensureCurrentGeometrySnapshot(const OperationContext& context);
     void handleProcessUnitMoveToBackRequest
     (
         const QVector<cadcam::planning::ProcessUnitKey>& selectedUnitKeys,

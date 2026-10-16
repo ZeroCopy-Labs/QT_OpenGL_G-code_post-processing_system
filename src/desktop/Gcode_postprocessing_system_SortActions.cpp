@@ -196,8 +196,16 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan2D
     policy.hasInitialPosition = true;
     policy.numericalEpsilon = 1.0e-5;
     const OperationContext context = createOperationContext(QStringLiteral("BuildAndApplyPlanarProcessPlan"));
+    // 规划输入来自 CamJob 持有的几何快照：过期时按需重建，规划不再读取 CadDocument。
+    if (!ensureCurrentGeometrySnapshot(context))
+    {
+        QMessageBox::warning(this, commandTitle, QStringLiteral("无法建立当前几何快照，排序已中止。"));
+        return false;
+    }
+
     ProcessPlanningService service;
-    auto plan = service.buildPlanarPlan(m_document, m_camJob.processState(), policy, context);
+    auto plan = service.buildPlanarPlan
+        (*m_camJob.geometrySnapshot(), m_camJob.processState(), policy, context);
     if (!plan.succeeded() || !plan.value.has_value())
     {
         QString message = QStringLiteral("无法生成三轴加工计划。");
@@ -217,6 +225,16 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan2D
     }
 
     cadcam::planning::ProcessPlan resolvedPlan = std::move(*plan.value);
+    // 发布守卫：规划期间文档已变化时拒绝写入计划。
+    if (m_document.contentRevision() != resolvedPlan.contentRevision)
+    {
+        const QString message = QStringLiteral("CAD 几何在规划期间发生变化，本次排序结果未应用。");
+        ui->openGLWidget->appendCommandMessage(QStringLiteral("[加工计划] %1").arg(message));
+        ui->openGLWidget->refreshCommandPrompt();
+        statusBar()->showMessage(message, 8000);
+        QMessageBox::warning(this, commandTitle, message);
+        return false;
+    }
     m_camJob.processState().setProcessUnitSequence(resolvedPlan.processUnitSequence.units);
     resolvedPlan.processUnitSequence = m_camJob.processState().processUnitSequence();
     resolvedPlan.processStateRevision = m_camJob.processState().revision();
@@ -340,9 +358,16 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan3D
     const OperationContext context = createOperationContext(QStringLiteral("BuildAndApplyProcessPlan3D"));
     const std::optional<cadcam::machining::TubeSectionModel> section =
         m_rotaryTubeSectionModel.coreModel;
+    // 规划输入来自 CamJob 持有的几何快照：过期时按需重建，规划不再读取 CadDocument。
+    if (!ensureCurrentGeometrySnapshot(context))
+    {
+        QMessageBox::warning(this, commandTitle, QStringLiteral("无法建立当前几何快照，排序已中止。"));
+        return false;
+    }
+
     ProcessPlanningService service;
     auto planResult = service.buildRotaryPlan
-        (m_document, m_camJob.processState(), section, policy, context);
+        (*m_camJob.geometrySnapshot(), m_camJob.processState(), section, policy, context);
     if (!planResult.succeeded() || !planResult.value.has_value())
     {
         QString message = QStringLiteral("无法生成加工计划。");
@@ -362,6 +387,16 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan3D
     }
 
     cadcam::planning::ProcessPlan resolvedPlan = std::move(*planResult.value);
+    // 发布守卫：规划期间文档已变化时拒绝写入计划。
+    if (m_document.contentRevision() != resolvedPlan.contentRevision)
+    {
+        const QString message = QStringLiteral("CAD 几何在规划期间发生变化，本次排序结果未应用。");
+        ui->openGLWidget->appendCommandMessage(QStringLiteral("[加工计划] %1").arg(message));
+        ui->openGLWidget->refreshCommandPrompt();
+        statusBar()->showMessage(message, 8000);
+        QMessageBox::warning(this, commandTitle, message);
+        return false;
+    }
     m_camJob.processState().setProcessUnitSequence(resolvedPlan.processUnitSequence.units);
     resolvedPlan.processUnitSequence = m_camJob.processState().processUnitSequence();
     resolvedPlan.processStateRevision = m_camJob.processState().revision();

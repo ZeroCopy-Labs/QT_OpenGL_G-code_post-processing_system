@@ -154,3 +154,35 @@ OperationResult<GeometrySourceSnapshot> DocumentGeometrySnapshotBuilder::capture
     }
     return result;
 }
+
+// 捕获并编译当前文档的几何快照。
+OperationResult<GeometrySnapshot> captureAndCompileDocumentGeometrySnapshot
+(
+    const CadDocument& document,
+    GeometryExecutionMode mode,
+    const TaskContext& taskContext
+)
+{
+    OperationResult<GeometrySnapshot> result;
+    DocumentGeometrySnapshotBuilder builder;
+    auto captured = builder.capture(document, taskContext.operationContext);
+    result.mergeDiagnostics(captured);
+    if (!captured.succeeded() || !captured.value.has_value())
+    {
+        result.status = captured.status;
+        return result;
+    }
+
+    GeometrySnapshotCompiler compiler;
+    auto compiled = compiler.compile(*captured.value, mode, taskContext);
+    result.mergeDiagnostics(compiled);
+    if (!compiled.succeeded() || !compiled.value.has_value())
+    {
+        result.status = compiled.status;
+        return result;
+    }
+
+    result.status = compiled.status;
+    result.value = std::move(*compiled.value);
+    return result;
+}

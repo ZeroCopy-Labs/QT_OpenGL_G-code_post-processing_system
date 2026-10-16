@@ -1,5 +1,6 @@
 #pragma once
 
+#include "application/geometry/GeometrySnapshot.h"
 #include "core/diagnostics/OperationContext.h"
 #include "core/diagnostics/OperationResult.h"
 #include "core/planning/ProcessPlan.h"
@@ -8,14 +9,13 @@
 
 #include <optional>
 
-class CadDocument;
 
 class ProcessPlanningService
 {
 public:
     OperationResult<cadcam::planning::ProcessPlan> buildPlanarPlan
     (
-        CadDocument& document,
+        const GeometrySnapshot& snapshot,
         const cadcam::process::DocumentProcessState& processState,
         const cadcam::planning::PlanarProcessPlanningPolicy& policy,
         const OperationContext& context
@@ -23,7 +23,7 @@ public:
 
     OperationResult<cadcam::planning::ProcessPlan> buildRotaryPlan
     (
-        CadDocument& document,
+        const GeometrySnapshot& snapshot,
         const cadcam::process::DocumentProcessState& processState,
         const std::optional<cadcam::machining::TubeSectionModel>& tubeSection,
         const cadcam::planning::ProcessPlanningPolicy& policy,

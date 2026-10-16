@@ -1112,6 +1112,9 @@
     <ClCompile Include="src\application\geometry\DocumentGeometrySnapshotBuilder.cpp">
       <Filter>Source Files\application\geometry</Filter>
     </ClCompile>
+    <ClCompile Include="src\application\geometry\GeometrySamplingPolicy.cpp">
+      <Filter>Source Files\application\geometry</Filter>
+    </ClCompile>
     <ClCompile Include="src\application\geometry\GeometrySnapshotCompiler.cpp">
       <Filter>Source Files\application\geometry</Filter>
     </ClCompile>
@@ -1215,6 +1218,9 @@
       <Filter>Header Files\application\geometry</Filter>
     </ClInclude>
     <ClInclude Include="include\application\geometry\DocumentGeometrySnapshotBuilder.h">
+      <Filter>Header Files\application\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="include\application\geometry\GeometrySamplingPolicy.h">
       <Filter>Header Files\application\geometry</Filter>
     </ClInclude>
     <ClInclude Include="include\application\geometry\GeometrySnapshotCompiler.h">

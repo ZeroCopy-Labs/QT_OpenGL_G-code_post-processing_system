@@ -4,6 +4,22 @@
 
 namespace cadcam::cam
 {
+    bool CamJob::isGeometrySnapshotCurrent(std::uint64_t contentRevision) const
+    {
+        return m_geometrySnapshot.has_value()
+            && m_geometrySnapshot->matchesRevision(contentRevision);
+    }
+
+    void CamJob::setGeometrySnapshot(GeometrySnapshot snapshot)
+    {
+        m_geometrySnapshot = std::move(snapshot);
+    }
+
+    void CamJob::invalidateGeometrySnapshot()
+    {
+        m_geometrySnapshot.reset();
+    }
+
     bool CamJob::isProcessPlanCurrent(std::uint64_t contentRevision) const
     {
         return m_processPlan.has_value()

@@ -1,5 +1,7 @@
 #include "application/geometry/GeometrySnapshotCompiler.h"
 
+#include "application/geometry/GeometrySamplingPolicy.h"
+
 #include <QThread>
 #include <QThreadPool>
 
@@ -52,7 +54,6 @@ namespace
     GeometrySnapshotEntry compileEntry
     (
         const GeometrySourceEntry& sourceEntry,
-        const cadcam::geometry::SamplingPolicy& policy,
         const OperationContext& context
     )
     {
@@ -61,7 +62,11 @@ namespace
         entry.attributes = sourceEntry.attributes;
         entry.sourceKind = sourceEntry.sourceKind;
         entry.status = sourceEntry.status;
+        entry.sourceEntity = sourceEntry.sourceEntity;
         entry.diagnostics = sourceEntry.diagnostics;
+        // 采样策略与原始图元类型一一对应，保证与既有生产采样语义一致。
+        entry.samplingPolicy =
+            cadcam::geometry::productionGeometrySamplingPolicy(sourceEntry.attributes.originalDxfType);
 
         if (!sourceEntry.sourceEntity.has_value())
         {
@@ -90,7 +95,7 @@ namespace
         OperationResult<cadcam::geometry::Path3D> compiled = compiler.compile
         (
             *sourceEntry.sourceEntity,
-            policy,
+            entry.samplingPolicy,
             options,
             context
         );
@@ -164,7 +169,6 @@ namespace
 OperationResult<GeometrySnapshot> GeometrySnapshotCompiler::compile
 (
     const GeometrySourceSnapshot& source,
-    const cadcam::geometry::SamplingPolicy& policy,
     GeometryExecutionMode mode,
     const TaskContext& taskContext
 ) const
@@ -185,7 +189,6 @@ OperationResult<GeometrySnapshot> GeometrySnapshotCompiler::compile
 
     GeometrySnapshot snapshot;
     snapshot.contentRevision = source.contentRevision;
-    snapshot.samplingPolicy = policy;
     const std::size_t totalCount = source.entries.size();
     taskContext.reportProgress(0U, totalCount);
 
@@ -199,7 +202,7 @@ OperationResult<GeometrySnapshot> GeometrySnapshotCompiler::compile
                 break;
             }
             snapshot.entries.push_back
-                (compileEntry(sourceEntry, policy, taskContext.operationContext));
+                (compileEntry(sourceEntry, taskContext.operationContext));
             taskContext.reportProgress(snapshot.entries.size(), totalCount);
             if (taskContext.cancellationToken.isCancellationRequested())
             {
@@ -230,7 +233,7 @@ OperationResult<GeometrySnapshot> GeometrySnapshotCompiler::compile
         for (int worker = 0; worker < workerCount; ++worker)
         {
             pool.start
-            ([&source, &policy, &taskContext, &resultEntries, &nextIndex,
+            ([&source, &taskContext, &resultEntries, &nextIndex,
                 &completedCount, &activeWorkers, &completionChanged]()
             {
                 while (!taskContext.cancellationToken.isCancellationRequested())
@@ -242,7 +245,7 @@ OperationResult<GeometrySnapshot> GeometrySnapshotCompiler::compile
                         break;
                     }
                     resultEntries[index] = compileEntry
-                        (source.entries[index], policy, taskContext.operationContext);
+                        (source.entries[index], taskContext.operationContext);
                     completedCount.fetch_add(1U);
                     completionChanged.notify_one();
                 }

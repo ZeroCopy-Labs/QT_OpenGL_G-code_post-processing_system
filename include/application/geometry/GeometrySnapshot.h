@@ -44,14 +44,17 @@ struct GeometrySnapshotEntry
     cadcam::geometry::SourceGeometryKind sourceKind =
         cadcam::geometry::SourceGeometryKind::Unknown;
     OperationStatus status = OperationStatus::InternalError;
+    // 原始解析几何（值对象），供需要解析参数或按起点重新采样的调用方使用。
+    std::optional<cadcam::geometry::SourceEntity> sourceEntity;
     std::optional<cadcam::geometry::Path3D> path;
+    // 编译本条目路径时实际使用的采样策略，供按同语义重新编译的调用方复用。
+    cadcam::geometry::SamplingPolicy samplingPolicy;
     QVector<Diagnostic> diagnostics;
 };
 
 struct GeometrySnapshot
 {
     std::uint64_t contentRevision = 0;
-    cadcam::geometry::SamplingPolicy samplingPolicy;
     std::vector<GeometrySnapshotEntry> entries;
 
     bool matchesRevision(std::uint64_t currentRevision) const

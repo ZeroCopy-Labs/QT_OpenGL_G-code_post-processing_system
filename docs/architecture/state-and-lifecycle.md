@@ -25,7 +25,9 @@
 
 ## 3. 加工上下文
 
-用户加工状态、加工设置和当前加工计划由应用层 `CamJob` 统一持有：`CamJob::processState()` 保存逐图元加工输入与唯一加工单元序列，`CamJob::settings()` 保存壁厚覆盖和断面修正开关，`CamJob::processPlan()` 保存当前有效的加工计划。桌面层只持有 `CamJob` 实例本身，不再分别拥有这些状态。
+用户加工状态、加工设置、CAD 几何快照和当前加工计划由应用层 `CamJob` 统一持有：`CamJob::geometrySnapshot()` 保存 CAM 看到的 CAD 几何，`CamJob::processState()` 保存逐图元加工输入与唯一加工单元序列，`CamJob::settings()` 保存壁厚覆盖和断面修正开关，`CamJob::processPlan()` 保存当前有效的加工计划。桌面层只持有 `CamJob` 实例本身，不再分别拥有这些状态。
+
+几何快照与文档内容 revision 对应：`CamJob::isGeometrySnapshotCurrent(documentContentRevision)` 判断有效性，`CamJob::invalidateGeometrySnapshot()` 在 CAD 变化后使其失效；需要规划时由应用层按需重建，CAD 编辑过程中不重新编译几何。加工状态变化不影响快照有效期。
 
 加工上下文分为用户业务输入和自动分析状态。
 

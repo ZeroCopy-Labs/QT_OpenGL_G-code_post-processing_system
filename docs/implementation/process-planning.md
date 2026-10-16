@@ -16,7 +16,7 @@
 
 ## 输入与输出
 
-输入是 `CadDocument`、`DocumentProcessState`、规划策略和四轴可选的 `TubeSectionModel`。
+输入是 `GeometrySnapshot`、`DocumentProcessState`、规划策略和四轴可选的 `TubeSectionModel`；几何快照由应用层在需要规划时从 `CadDocument` 捕获并编译。
 文档适配器输出带稳定 `EntityId` 的精确源几何、统一 `Path3D`、图元属性及加工状态。
 四轴输入额外包含统一 `PathTopology`、加工断面角色、可选截面及当前有效截面中心。
 输出 `ProcessPlan`，并由其派生 Viewer 使用的展示快照。
@@ -75,9 +75,8 @@
 三轴计划生产链：
 
 ```text
-CadDocument + DocumentProcessState
-→ DocumentProcessPlanningAdapter::capturePlanar
-→ GeometryCompiler
+GeometrySnapshot + DocumentProcessState
+→ DocumentProcessPlanningAdapter::capturePlanar（直接使用快照路径）
 → PathTopology 连通分量
 → PlanarProcessPlanBuilder
 → 连续端点遍历
@@ -88,9 +87,9 @@ CadDocument + DocumentProcessState
 四轴计划生产链：
 
 ```text
-CadDocument + DocumentProcessState + 可选 TubeSectionModel
+GeometrySnapshot + DocumentProcessState + 可选 TubeSectionModel
 → DocumentProcessPlanningAdapter::captureRotary
-→ GeometryCompiler + PathTopology
+→ GeometrySnapshotTopologyAdapter + PathTopology
 → ProcessPlanBuilder
 → 严格闭环提取 + 开放连通分量连续链拆分
 → ProcessGroup 转换为 ProcessUnit
@@ -264,11 +263,11 @@ Application 的 `DocumentProcessState` 持有当前 `ProcessUnitSequence`。Core
 - `src/desktop/Gcode_postprocessing_system_ProcessUnitActions.cpp`：加工单元编排（块内移尾、整组反向、端面语义）与派生结果失效。
 - `src/desktop/Gcode_postprocessing_system_WasteActions.cpp`：废面刷新与区间排除计算。
 - `include/desktop/internal/ProcessActionSupport.h`：上述四类操作共用的排序、几何与断面解析辅助实现细节。
-- `src/application/planning/ProcessPlanningService.cpp`：组织文档捕获、核心规划和 revision 复核。
+- `src/application/planning/ProcessPlanningService.cpp`：组织几何快照消费、核心规划和 revision 复核。
 - `include/infrastructure/config/GProfile.h`：保存周向、轴向扫描方向及默认值。
 - `src/ui/dialogs/GProfileDialog.cpp`：提供周向和轴向扫描方向配置入口。
 - `src/cad/editing/CadEditer_CommandActions.cpp`：提供不包含加工业务类型的回调命令，并接入统一 Undo/Redo 栈。
-- `src/application/planning/DocumentProcessPlanningAdapter.cpp`：将生产文档和加工状态转换为规划值对象。
+- `src/application/planning/DocumentProcessPlanningAdapter.cpp`：将几何快照和加工状态转换为规划值对象，不再读取 `CadDocument`。
 - `src/core/planning/PlanarProcessPlanBuilder.cpp`：构建三轴最近距离加工计划。
 - `src/core/planning/ProcessPlanBuilder.cpp`：保留四轴计划构建的唯一生产入口和阶段编排。
 - `src/core/planning/internal/ProcessPlanBuilder_*.inl`：按内部类型与曲线、截面映射、遍历与区位、区位诊断、闭环遍历、Break 区位段遍历、入口选择与完整性校验拆分四轴规划实现；这些片段仍在同一匿名命名空间和编译单元中执行，不形成并行算法或替代入口。

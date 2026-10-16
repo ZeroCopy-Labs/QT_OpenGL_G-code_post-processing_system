@@ -18,6 +18,31 @@ namespace
         return std::sqrt(dx * dx + dy * dy + dz * dz);
     }
 
+    // 只有可加工路径类型参与拓扑构建，与生产四轴规划输入的筛选保持一致。
+    bool supportsProcessPath(cadcam::geometry::SourceGeometryKind kind)
+    {
+        using cadcam::geometry::SourceGeometryKind;
+        return kind == SourceGeometryKind::Line
+            || kind == SourceGeometryKind::Arc
+            || kind == SourceGeometryKind::Circle
+            || kind == SourceGeometryKind::Ellipse
+            || kind == SourceGeometryKind::Polyline
+            || kind == SourceGeometryKind::Spline;
+    }
+
+    // 至少存在一条可用边才建立拓扑记录，阈值与生产实现相同。
+    bool hasUsablePath(const cadcam::geometry::Path3D& path, double minimumEdgeLength)
+    {
+        if (path.vertices.size() < 2U) return false;
+        for (std::size_t index = 1; index < path.vertices.size(); ++index)
+        {
+            const auto& left = path.vertices[index - 1U].position;
+            const auto& right = path.vertices[index].position;
+            if (distance3D(left, right) > minimumEdgeLength) return true;
+        }
+        return false;
+    }
+
     Diagnostic adapterDiagnostic
     (
         const OperationContext& context,
@@ -142,24 +167,23 @@ GeometrySnapshotTopologyAdapter::convert
             continue;
         }
 
+        // 与生产四轴规划输入保持一致：只接收可加工路径类型和存在可用边的条目，
+        // 路径点按快照路径原样复制，不额外插入闭合点，闭合语义由 semanticallyClosed 表达。
+        if (!supportsProcessPath(entry->sourceKind)
+            || !hasUsablePath(*entry->path, tolerance.minimumEdgeLength))
+        {
+            continue;
+        }
+
         TopologyPathRecord record;
         record.sourceIndex = entry->sourceIndex;
         record.entityId = entry->attributes.entityId;
         record.sourceKind = entry->sourceKind;
         record.semanticallyClosed = entry->path->closed;
-        record.points.reserve(entry->path->vertices.size() + (record.semanticallyClosed ? 1U : 0U));
+        record.points.reserve(entry->path->vertices.size());
         for (const cadcam::geometry::PathVertex3D& vertex : entry->path->vertices)
         {
-            if (record.points.empty()
-                || distance3D(record.points.back(), vertex.position) > tolerance.minimumEdgeLength)
-            {
-                record.points.push_back(vertex.position);
-            }
-        }
-        if (record.semanticallyClosed && record.points.size() >= 3U
-            && distance3D(record.points.front(), record.points.back()) > tolerance.minimumEdgeLength)
-        {
-            record.points.push_back(record.points.front());
+            record.points.push_back(vertex.position);
         }
         input.records.push_back(std::move(record));
     }

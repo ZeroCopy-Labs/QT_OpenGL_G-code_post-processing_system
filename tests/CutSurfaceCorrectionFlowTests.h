@@ -1,6 +1,7 @@
 #pragma once
 
 #include "application/export/GGenerator.h"
+#include "application/geometry/DocumentGeometrySnapshotBuilder.h"
 #include "application/machine/MachineTrajectoryService.h"
 #include "application/planning/ProcessPlanningService.h"
 #include "cad/document/CadDocument.h"
@@ -57,7 +58,14 @@ inline void boundaryMinimumXOrderTests()
         section.contentRevision = document.contentRevision();
         planning::ProcessPlanningPolicy policy;
         policy.connectionTolerance = 0.001;
-        auto result = ProcessPlanningService().buildRotaryPlan(document, state, section, policy, {});
+        auto snapshot = captureAndCompileDocumentGeometrySnapshot
+        (document, GeometryExecutionMode::Serial, {});
+    if (!snapshot.succeeded() || !snapshot.value.has_value())
+    {
+        throw std::runtime_error("geometry snapshot build failed");
+    }
+    auto result = ProcessPlanningService().buildRotaryPlan
+        (*snapshot.value, state, section, policy, {});
         if (!result.succeeded() || !result.value.has_value())
         {
             for (const auto& diagnostic : result.diagnostics)

@@ -7,7 +7,10 @@
 #include "cad/items/CadItem.h"
 #include "ui/dialogs/GProfileDialog.h"
 #include "ui/dialogs/GProfileManagerDialog.h"
+#include "application/geometry/DocumentGeometrySnapshotBuilder.h"
+#include "application/geometry/GeometrySnapshotCompiler.h"
 #include "application/process/ProcessStateEditSync.h"
+#include "application/tasks/TaskContext.h"
 #include "infrastructure/config/MachiningParameterStore.h"
 #include "infrastructure/config/GProfilePathStore.h"
 #include "core/machine/MachineTrajectory.h"
@@ -2118,6 +2121,13 @@ void Gcode_postprocessing_system::initializeToolPanel()
 
     connect(&m_document, &CadDocument::sceneChanged, this, [this]()
     {
+        if (m_camJob.hasGeometrySnapshot()
+            && !m_camJob.isGeometrySnapshotCurrent(m_document.contentRevision()))
+        {
+            // CAD 变化只使快照失效；需要规划时再按需重建，编辑过程中不重复编译几何。
+            m_camJob.invalidateGeometrySnapshot();
+        }
+
         if (m_camJob.hasProcessPlan() && !m_camJob.isProcessPlanCurrent(m_document.contentRevision()))
         {
             invalidateCurrentProcessPlan();
@@ -2519,6 +2529,59 @@ void Gcode_postprocessing_system::applyWorkspaceState()
             : QStringLiteral("CAM 工作区：规划 / 仿真 / NC 与后处理。"),
         3000
     );
+}
+
+// 确保当前 CAM 任务持有与文档 revision 一致的几何快照。
+// 只有快照缺失或过期时才捕获并编译；CAD 连续编辑期间不做任何自动重建。
+bool Gcode_postprocessing_system::ensureCurrentGeometrySnapshot(const OperationContext& context)
+{
+    const std::uint64_t documentRevision = m_document.contentRevision();
+    if (documentRevision == 0U)
+    {
+        const QString message = QStringLiteral("当前文档没有有效内容，无法建立几何快照。");
+        ui->openGLWidget->appendCommandMessage(QStringLiteral("[加工计划] %1").arg(message));
+        ui->openGLWidget->refreshCommandPrompt();
+        return false;
+    }
+
+    if (m_camJob.isGeometrySnapshotCurrent(documentRevision))
+    {
+        return true;
+    }
+
+    TaskContext taskContext;
+    taskContext.operationContext = context;
+    auto compiled = captureAndCompileDocumentGeometrySnapshot
+        (m_document, GeometryExecutionMode::Serial, taskContext);
+    if (!compiled.succeeded() || !compiled.value.has_value())
+    {
+        QString message = QStringLiteral("无法建立当前 CAD 几何快照。");
+        for (const Diagnostic& diagnostic : compiled.diagnostics)
+        {
+            if (!diagnostic.userMessage.trimmed().isEmpty())
+            {
+                message = diagnostic.userMessage;
+                break;
+            }
+        }
+        ui->openGLWidget->appendCommandMessage(QStringLiteral("[加工计划] %1").arg(message));
+        ui->openGLWidget->refreshCommandPrompt();
+        statusBar()->showMessage(message, 8000);
+        return false;
+    }
+
+    // 捕获和编译期间文档可能已经变化：只发布仍然对应当前文档的快照。
+    if (!compiled.value->matchesRevision(m_document.contentRevision()))
+    {
+        const QString message = QStringLiteral("CAD 几何在快照建立期间发生变化，请重新执行排序。");
+        ui->openGLWidget->appendCommandMessage(QStringLiteral("[加工计划] %1").arg(message));
+        ui->openGLWidget->refreshCommandPrompt();
+        statusBar()->showMessage(message, 8000);
+        return false;
+    }
+
+    m_camJob.setGeometrySnapshot(std::move(*compiled.value));
+    return true;
 }
 
 void Gcode_postprocessing_system::syncToolPanelState()

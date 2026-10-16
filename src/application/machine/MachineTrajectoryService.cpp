@@ -3,6 +3,7 @@
 
 #include "cad/document/CadDocument.h"
 #include "application/geometry/DocumentGeometrySnapshotBuilder.h"
+#include "application/geometry/GeometrySamplingPolicy.h"
 #include "core/machine/ProcessUnitExecutionResolver.h"
 #include "core/machine/RotaryTrajectoryBuilder.h"
 #include "core/machining/TubeSectionProjector.h"
@@ -210,38 +211,6 @@ namespace
         }
     }
 
-    cadcam::geometry::SamplingPolicy productionSamplingPolicy(int dxfType)
-    {
-        cadcam::geometry::SamplingPolicy policy;
-        policy.chordTolerance = 0.0;
-        switch (static_cast<DRW::ETYPE>(dxfType))
-        {
-        case DRW::ETYPE::CIRCLE:
-            policy.minimumSegments = 128;
-            policy.fullTurnSegments = 128;
-            break;
-        case DRW::ETYPE::ARC:
-            policy.minimumSegments = 8;
-            policy.maximumAngularStep = 5.0 * 6.28318530717958647692 / 360.0;
-            policy.fullTurnSegments = 128;
-            break;
-        case DRW::ETYPE::ELLIPSE:
-            policy.minimumSegments = 16;
-            policy.fullTurnSegments = 128;
-            break;
-        case DRW::ETYPE::POLYLINE:
-        case DRW::ETYPE::LWPOLYLINE:
-            policy.minimumSegments = 1;
-            policy.minimumBulgeSegments = 4;
-            policy.fullTurnSegments = 128;
-            break;
-        default:
-            policy.minimumSegments = 1;
-            break;
-        }
-        return policy;
-    }
-
     Diagnostic serviceDiagnostic
     (
         DiagnosticCode code,
@@ -353,7 +322,7 @@ OperationResult<cadcam::machine::MachineTrajectory> MachineTrajectoryService::bu
             entry.sourceIndex,
             entry.sourceKind,
             &*entry.sourceEntity,
-            productionSamplingPolicy(entry.attributes.originalDxfType)
+            cadcam::geometry::trajectoryGeometrySamplingPolicy(entry.attributes.originalDxfType)
         });
     }
 

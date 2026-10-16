@@ -3,6 +3,7 @@
 #include "ui/dialogs/ToolTransferDialog.h"
 #include "ui/dialogs/GProfileDialog.h"
 #include "infrastructure/config/MachiningParameterStore.h"
+#include "application/geometry/DocumentGeometrySnapshotBuilder.h"
 #include "application/machine/MachineTrajectoryService.h"
 #include "application/planning/ProcessPlanningService.h"
 #include "application/export/GGenerator.h"
@@ -170,7 +171,11 @@ inline void toolTransferTests()
         policy.sameZone = config.sameZone;
         policy.sameZone.departureRatio = policy.sameZone.approachRatio = ratio;
         policy.coordinatedTransferEnabled = linked;
-        auto plan = ProcessPlanningService().buildRotaryPlan(document, state, section, policy, {});
+        auto snapshot = captureAndCompileDocumentGeometrySnapshot
+            (document, GeometryExecutionMode::Serial, {});
+        check(snapshot.succeeded() && snapshot.value.has_value());
+        auto plan = ProcessPlanningService().buildRotaryPlan
+            (*snapshot.value, state, section, policy, {});
         check(plan.succeeded() && plan.value.has_value());
         auto processConfig = MachiningProcessConfig::fromProfile(stored);
         processConfig.sameZone = policy.sameZone;

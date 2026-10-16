@@ -1,7 +1,6 @@
 #include "application/planning/ProcessPlanningService.h"
 #include "core/diagnostics/SummaryLog.h"
 
-#include "cad/document/CadDocument.h"
 #include "application/planning/DocumentProcessPlanningAdapter.h"
 #include "core/machining/TubeSectionProjector.h"
 #include "core/planning/PlanarProcessPlanBuilder.h"
@@ -1127,7 +1126,7 @@ namespace
 
 OperationResult<cadcam::planning::ProcessPlan> ProcessPlanningService::buildPlanarPlan
 (
-    CadDocument& document,
+    const GeometrySnapshot& snapshot,
     const cadcam::process::DocumentProcessState& processState,
     const cadcam::planning::PlanarProcessPlanningPolicy& policy,
     const OperationContext& context
@@ -1136,7 +1135,7 @@ OperationResult<cadcam::planning::ProcessPlan> ProcessPlanningService::buildPlan
     OperationResult<cadcam::planning::ProcessPlan> result;
     DocumentProcessPlanningAdapter adapter;
     auto capture = adapter.capturePlanar
-        (document, processState, policy.sortIntent, context);
+        (snapshot, processState, policy.sortIntent, context);
     result.mergeDiagnostics(capture);
     if (!capture.succeeded() || !capture.value.has_value())
     {
@@ -1164,7 +1163,7 @@ OperationResult<cadcam::planning::ProcessPlan> ProcessPlanningService::buildPlan
         ));
         return result;
     }
-    if (document.contentRevision() != plan.value->contentRevision
+    if (snapshot.contentRevision != plan.value->contentRevision
         || processState.revision() != plan.value->processStateRevision)
     {
         result.status = OperationStatus::Conflict;
@@ -1174,7 +1173,7 @@ OperationResult<cadcam::planning::ProcessPlan> ProcessPlanningService::buildPlan
         diagnostic.component = QStringLiteral("ProcessPlanningService");
         diagnostic.operation = context.operationName;
         diagnostic.stage = QStringLiteral("validate-planar-plan-revision");
-        diagnostic.userMessage = QStringLiteral("文档或加工状态在三轴加工计划构建期间已变更。");
+        diagnostic.userMessage = QStringLiteral("几何快照或加工状态在三轴加工计划构建期间已变更。");
         diagnostic.correlationId = context.correlationId;
         result.addDiagnostic(diagnostic);
         return result;
@@ -1186,7 +1185,7 @@ OperationResult<cadcam::planning::ProcessPlan> ProcessPlanningService::buildPlan
 
 OperationResult<cadcam::planning::ProcessPlan> ProcessPlanningService::buildRotaryPlan
 (
-    CadDocument& document,
+    const GeometrySnapshot& snapshot,
     const cadcam::process::DocumentProcessState& processState,
     const std::optional<cadcam::machining::TubeSectionModel>& tubeSection,
     const cadcam::planning::ProcessPlanningPolicy& policy,
@@ -1211,7 +1210,7 @@ OperationResult<cadcam::planning::ProcessPlan> ProcessPlanningService::buildRota
     cadcam::topology::PathTopology topology;
     DocumentProcessPlanningAdapter adapter;
     auto capture = adapter.captureRotary
-        (document, processState, tubeSection, policy.sortIntent,
+        (snapshot, processState, tubeSection, policy.sortIntent,
             policy.connectionTolerance, topology, context);
     if (!capture.succeeded() || !capture.value.has_value())
     {
@@ -1263,7 +1262,7 @@ OperationResult<cadcam::planning::ProcessPlan> ProcessPlanningService::buildRota
         }
     }
     if (result.succeeded() && result.value.has_value()
-        && (document.contentRevision() != result.value->contentRevision
+        && (snapshot.contentRevision != result.value->contentRevision
             || processState.revision() != result.value->processStateRevision))
     {
         result.status = OperationStatus::Conflict;
@@ -1274,7 +1273,7 @@ OperationResult<cadcam::planning::ProcessPlan> ProcessPlanningService::buildRota
         diagnostic.component = QStringLiteral("ProcessPlanningService");
         diagnostic.operation = context.operationName;
         diagnostic.stage = QStringLiteral("validate-rotary-plan-revision");
-        diagnostic.userMessage = QStringLiteral("文档或加工状态在四轴加工计划构建期间已变更。");
+        diagnostic.userMessage = QStringLiteral("几何快照或加工状态在四轴加工计划构建期间已变更。");
         diagnostic.correlationId = context.correlationId;
         result.addDiagnostic(diagnostic);
     }

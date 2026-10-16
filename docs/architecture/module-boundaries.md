@@ -40,18 +40,38 @@ Application 的 `ProcessStateEditSync` 在同一历史项内完成加工状态�
 
 ## 3. CAM 任务边界
 
-`CamJob`（`application/cam/CamJob.h`）是当前一次 CAM 加工任务的应用层聚合边界，拥有三类事实：
+`CamJob`（`application/cam/CamJob.h`）是当前一次 CAM 加工任务的应用层聚合边界，拥有四类事实：
 
 ```text
 CamJob
+├── GeometrySnapshot       CAM 看到的 CAD 几何（CAD → CAM 数据边界）
 ├── DocumentProcessState   加工输入状态
 ├── CamJobSettings         加工设置（壁厚覆盖、断面正/负向修正）
 └── ProcessPlan            当前有效的加工计划（派生结果）
 ```
 
-它只提供设置计划、清除计划、判断计划是否存在和是否仍然有效等生命周期操作，不负责 CAD 编辑、几何计算、排序算法、轨迹计算、G-code 生成、视图绘制和配置持久化，也不拥有 `CadDocument`、`CadEditer`、`CadViewer`、`ProcessPresentationSnapshot`、`RotaryTubeSectionModel` 或 `GProfile`。
+它只提供设置计划、清除计划、判断几何快照与计划是否存在和是否仍然有效等生命周期操作，不负责 CAD 编辑、几何计算、快照构建、排序算法、轨迹计算、G-code 生成、视图绘制和配置持久化，也不拥有 `CadDocument`、`CadEditer`、`CadViewer`、`ProcessPresentationSnapshot`、`RotaryTubeSectionModel` 或 `GProfile`。
 
-当前阶段规划服务仍然直接接收 `CadDocument` 与 `CamJob::processState()`；计划的有效性由文档内容 revision 与加工状态 revision 共同决定，因此 `ProcessPlan` 仍然直接依赖 `CadDocument`。建立 `CadDocument → GeometrySnapshot → CamJob` 的正式输入边界属于后续阶段，`CamJob` 现在不持有 CAD 文档。
+几何输入链固定为：
+
+```text
+CadDocument
+      │ DocumentGeometrySnapshotBuilder::capture
+      ▼
+GeometrySourceSnapshot
+      │ GeometrySnapshotCompiler::compile（按图元类型选择采样策略）
+      ▼
+GeometrySnapshot          ← CamJob 持有
+      │
+      ▼
+DocumentProcessPlanningAdapter → ProcessPlanningService → ProcessPlan
+```
+
+`DocumentProcessPlanningAdapter` 与 `ProcessPlanningService` 不再接收 `CadDocument`，也不再从 CAD 图元重新编译几何；四轴拓扑输入由 `GeometrySnapshotTopologyAdapter` 从同一快照转换。快照构建由应用层编排（桌面层 `ensureCurrentGeometrySnapshot()`）在需要规划时按需触发，不建立全局快照管理器。
+
+仍然直接接收 `CadDocument` 的消费者是 `MachineTrajectoryService`、`NcProgramService`、`GGenerator` 与 compatibility 层的旧适配器，它们属于后续轨迹、导出和兼容阶段。
+
+`ProcessPresentationSnapshot` 仍由桌面层持有并交给 Viewer，`RotaryTubeSectionModel` 仍由桌面层持有，本阶段未迁移。
 
 ## 4. Core 边界
 
