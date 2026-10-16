@@ -816,9 +816,9 @@
     <ClInclude Include="include\cad\view\rendering\CadRenderLayer.h">
       <Filter>Header Files\cad\view\rendering</Filter>
     </ClInclude>
-    <ClInclude Include="include\cad\view\rendering\CamRenderLayer.h">
+    <QtMoc Include="include\cad\view\rendering\CamRenderLayer.h">
       <Filter>Header Files\cad\view\rendering</Filter>
-    </ClInclude>
+    </QtMoc>
     <ClInclude Include="include\cad\view\rendering\CamRenderVisualUtils.h">
       <Filter>Header Files\cad\view\rendering</Filter>
     </ClInclude>
@@ -1306,8 +1306,6 @@
     </ClInclude>
     <ClInclude Include="include\cad\view\rendering\SimulationRenderLayer.h">
       <Filter>Header Files\cad\view\rendering</Filter>
-    </ClInclude>
-      <Filter>Header Files\application\nc</Filter>
     </ClInclude>
     <ClInclude Include="include\application\geometry\GeometrySamplingPolicy.h">
       <Filter>Header Files\application\geometry</Filter>

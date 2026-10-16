@@ -690,7 +690,6 @@ if exist "$(VCRuntimeRedistDir)\*.dll" copy /Y "$(VCRuntimeRedistDir)\*.dll" "$(
     <ClInclude Include="include\cad\view\rendering\CadEntityRenderer.h" />
     <ClInclude Include="include\cad\view\rendering\CadItemGeometryDetail.h" />
     <ClInclude Include="include\cad\view\rendering\CadRenderLayer.h" />
-    <ClInclude Include="include\cad\view\rendering\CamRenderLayer.h" />
     <ClInclude Include="include\cad\view\rendering\CamRenderVisualUtils.h" />
     <ClInclude Include="include\cad\view\rendering\CadSelectionVisualUtils.h" />
     <ClInclude Include="include\cad\view\rendering\SelectionRenderLayer.h" />
