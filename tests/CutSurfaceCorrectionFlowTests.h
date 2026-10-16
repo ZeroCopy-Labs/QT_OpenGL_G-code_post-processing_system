@@ -184,12 +184,20 @@ inline void cutSurfaceCorrectionFlowTests()
     GProfileRotaryAxisConfig rotary = profile.rotaryAxisConfig();
     rotary.machiningPlaneZOffset = 1.25;
     profile.setRotaryAxisConfig(rotary);
+    // 轨迹服务只消费几何快照；这里按当前文档建立快照。
+    auto trajectorySnapshot = captureAndCompileDocumentGeometrySnapshot
+        (document, GeometryExecutionMode::Serial, {});
+    if (!trajectorySnapshot.succeeded() || !trajectorySnapshot.value.has_value())
+    {
+        throw std::runtime_error("geometry snapshot build failed");
+    }
     GGenerator generator;
     generator.setDocument(&document);
     generator.setProfile(&profile);
     generator.setGenerationMode(GGenerator::GenerationMode::Mode3D);
     generator.setProcessState(&state);
     generator.setProcessPlan(&plan);
+    generator.setGeometrySnapshot(&*trajectorySnapshot.value);
     generator.setTubeSectionModel(section);
     std::array<QString, 4> programs;
     for (int mode = 0; mode < 4; ++mode)
@@ -200,7 +208,7 @@ inline void cutSurfaceCorrectionFlowTests()
         config.cutSurfacePositiveCorrection = positive;
         config.cutSurfaceNegativeCorrection = negative;
         const auto trajectory = MachineTrajectoryService().buildRotaryTrajectory
-            (document, state, plan, section, config, {});
+            (*trajectorySnapshot.value, state, plan, section, config, {});
         for (const auto& d : trajectory.diagnostics)
             if (d.severity == DiagnosticSeverity::Error) std::cerr << d.userMessage.toStdString() << '\n';
         check(trajectory.succeeded() && trajectory.value.has_value());

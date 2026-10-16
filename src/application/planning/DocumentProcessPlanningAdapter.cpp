@@ -1,11 +1,13 @@
 #include "application/planning/DocumentProcessPlanningAdapter.h"
 
+#include "application/geometry/GeometryDuplicateAnalyzer.h"
 #include "application/geometry/GeometrySamplingPolicy.h"
 #include "application/tasks/TaskContext.h"
 #include "application/topology/GeometrySnapshotTopologyAdapter.h"
 #include "core/geometry/GeometryCompiler.h"
 
 #include <cmath>
+#include <set>
 #include <utility>
 
 namespace
@@ -122,6 +124,15 @@ DocumentProcessPlanningAdapter::capturePlanar
         return result;
     }
 
+    // 重复几何只影响加工：标记为排除项，不删除 CAD 图元。
+    const GeometryDuplicateAnalysis duplicates =
+        GeometryDuplicateAnalyzer().analyze(snapshot);
+    std::set<geometry::EntityId> duplicateEntityIds;
+    for (const GeometryDuplicateEntry& duplicate : duplicates.duplicates)
+    {
+        duplicateEntityIds.insert(duplicate.entityId);
+    }
+
     planning::PlanarProcessPlanningInput input;
     input.contentRevision = contentRevision;
     input.processStateRevision = stateRevision;
@@ -137,6 +148,7 @@ DocumentProcessPlanningAdapter::capturePlanar
         entity.visible = entry.attributes.visible;
         const process::EntityProcessState state = processState.stateOrDefault(entity.entityId);
         entity.processEnabled = state.overrideData.processEnabled;
+        entity.duplicateGeometry = duplicateEntityIds.count(entity.entityId) != 0U;
         entity.directionPreference = rebuildSequence
             ? process::DirectionPreference::Auto : state.overrideData.direction;
         entity.startParameter = rebuildSequence
@@ -201,6 +213,15 @@ DocumentProcessPlanningAdapter::captureRotary
 
     const topology::PathTopologyTolerance topologyTolerance =
         topology::PathTopologyTolerance::fromConnectionTolerance(connectionTolerance);
+    // 重复几何只影响加工：标记为排除项，不删除 CAD 图元。
+    const GeometryDuplicateAnalysis duplicates =
+        GeometryDuplicateAnalyzer().analyze(snapshot);
+    std::set<geometry::EntityId> duplicateEntityIds;
+    for (const GeometryDuplicateEntry& duplicate : duplicates.duplicates)
+    {
+        duplicateEntityIds.insert(duplicate.entityId);
+    }
+
     planning::ProcessPlanningInput input;
     input.contentRevision = contentRevision;
     input.processStateRevision = stateRevision;
@@ -223,6 +244,7 @@ DocumentProcessPlanningAdapter::captureRotary
         entity.visible = entry.attributes.visible;
         const process::EntityProcessState state = processState.stateOrDefault(entity.entityId);
         entity.processEnabled = state.overrideData.processEnabled;
+        entity.duplicateGeometry = duplicateEntityIds.count(entity.entityId) != 0U;
         entity.boundaryRole = state.overrideData.boundaryRole;
         entity.boundaryPairId = state.overrideData.boundaryPairId;
         entity.endCutSide = state.overrideData.endCutSide;

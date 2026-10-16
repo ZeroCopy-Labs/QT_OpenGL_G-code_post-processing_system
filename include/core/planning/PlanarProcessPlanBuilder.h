@@ -15,6 +15,8 @@ namespace cadcam::planning
         geometry::Path3D path;
         bool visible = true;
         bool processEnabled = true;
+        // 该图元与同组保留图元几何重复：仅排除加工，不删除 CAD 图元。
+        bool duplicateGeometry = false;
         process::DirectionPreference directionPreference = process::DirectionPreference::Auto;
         std::optional<double> startParameter;
     };

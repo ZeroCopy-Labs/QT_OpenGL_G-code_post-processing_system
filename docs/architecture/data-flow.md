@@ -40,6 +40,22 @@ CadDocument
 
 快照只在需要规划时按需建立：CAD 内容 revision 变化会使快照失效，但不会触发重新编译；加工状态 revision 变化只使加工计划失效，快照继续有效。
 
+几何快照之后 CAM 不再访问 `CadDocument`：
+
+```text
+GeometrySnapshot
+→ GeometryDuplicateAnalyzer（重复几何分析）
+→ ProcessPlanningInput
+→ ProcessPlanningService
+→ ProcessPlan
+→ MachineTrajectoryService
+→ MachineTrajectory
+```
+
+排序只计算加工计划：发现了重复几何时，保留第一个图元参与加工，其余在计划中按 `DuplicateGeometry` 排除；`CadDocument` 中的重复图元仍然存在，CAD 内容 revision 与撤销历史都不变化。CAD 去重仍是用户主动执行的 CAD 清理操作。
+
+轨迹生成只使用几何快照、加工计划和加工状态：`snapshot.contentRevision`、`plan.contentRevision` 与 `plan.processStateRevision` 必须互相对应，否则返回 `Conflict`，不自动重新规划。
+
 ## 4. 加工单元形成
 
 ```text

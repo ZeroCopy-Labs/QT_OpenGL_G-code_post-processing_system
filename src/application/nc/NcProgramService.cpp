@@ -103,6 +103,7 @@ OperationResult<cadcam::nc::NcProgram> NcProgramService::buildPlanarProgram
 
 OperationResult<cadcam::nc::NcProgram> NcProgramService::buildRotaryProgram
 (
+    const GeometrySnapshot& snapshot,
     CadDocument& document,
     const cadcam::process::DocumentProcessState& processState,
     const cadcam::planning::ProcessPlan& processPlan,
@@ -118,7 +119,7 @@ OperationResult<cadcam::nc::NcProgram> NcProgramService::buildRotaryProgram
     MachineTrajectoryService trajectoryService;
     auto trajectory = trajectoryService.buildRotaryTrajectory
     (
-        document,
+        snapshot,
         processState,
         processPlan,
         tubeSection,
@@ -140,7 +141,7 @@ OperationResult<cadcam::nc::NcProgram> NcProgramService::buildRotaryProgram
         result.status = metadata.status;
         return result;
     }
-    if (document.contentRevision() != processPlan.contentRevision
+    if (snapshot.contentRevision != processPlan.contentRevision
         || processState.revision() != processPlan.processStateRevision
         || trajectory.value->contentRevision != processPlan.contentRevision
         || trajectory.value->processStateRevision != processPlan.processStateRevision)
@@ -152,10 +153,10 @@ OperationResult<cadcam::nc::NcProgram> NcProgramService::buildRotaryProgram
         diagnostic.component = QStringLiteral("NcProgramService");
         diagnostic.operation = context.operationName;
         diagnostic.stage = QStringLiteral("validate-revision");
-        diagnostic.userMessage = QStringLiteral("轨迹、元数据、加工计划或文档版本不一致。");
+        diagnostic.userMessage = QStringLiteral("轨迹、元数据、加工计划或几何快照版本不一致。");
         diagnostic.correlationId = context.correlationId;
         diagnostic.context.insert(QStringLiteral("contentRevision"),
-            QVariant::fromValue<qulonglong>(document.contentRevision()));
+            QVariant::fromValue<qulonglong>(snapshot.contentRevision));
         result.addDiagnostic(diagnostic);
         return result;
     }

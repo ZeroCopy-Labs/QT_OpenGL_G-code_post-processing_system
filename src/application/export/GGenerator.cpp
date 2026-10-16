@@ -134,6 +134,11 @@ void GGenerator::setProcessPlan(const cadcam::planning::ProcessPlan* processPlan
     m_processPlan = processPlan;
 }
 
+void GGenerator::setGeometrySnapshot(const GeometrySnapshot* snapshot)
+{
+    m_geometrySnapshot = snapshot;
+}
+
 void GGenerator::setProcessState(const cadcam::process::DocumentProcessState* processState)
 {
     m_processState = processState;
@@ -186,7 +191,7 @@ OperationResult<QString> GGenerator::buildRotaryProgramText(const OperationConte
         ));
         return result;
     }
-    if (m_processPlan == nullptr || m_processState == nullptr)
+    if (m_processPlan == nullptr || m_processState == nullptr || m_geometrySnapshot == nullptr)
     {
         result.status = OperationStatus::InvalidInput;
         result.addDiagnostic(makeGeneratorDiagnostic
@@ -196,7 +201,7 @@ OperationResult<QString> GGenerator::buildRotaryProgramText(const OperationConte
             DiagnosticSeverity::Error,
             QStringLiteral("BuildRotaryProgramText"),
             QStringLiteral("ValidateProcessPlan"),
-            QStringLiteral("当前没有有效的四轴加工计划，无法导出。")
+            QStringLiteral("当前没有有效的四轴加工计划或几何快照，无法导出。")
         ));
         return result;
     }
@@ -223,6 +228,7 @@ OperationResult<QString> GGenerator::buildRotaryProgramText(const OperationConte
     NcProgramService service;
     auto program = service.buildRotaryProgram
     (
+        *m_geometrySnapshot,
         *m_document,
         *m_processState,
         *m_processPlan,

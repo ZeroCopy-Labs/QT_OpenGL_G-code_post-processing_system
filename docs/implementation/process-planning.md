@@ -267,7 +267,8 @@ Application 的 `DocumentProcessState` 持有当前 `ProcessUnitSequence`。Core
 - `include/infrastructure/config/GProfile.h`：保存周向、轴向扫描方向及默认值。
 - `src/ui/dialogs/GProfileDialog.cpp`：提供周向和轴向扫描方向配置入口。
 - `src/cad/editing/CadEditer_CommandActions.cpp`：提供不包含加工业务类型的回调命令，并接入统一 Undo/Redo 栈。
-- `src/application/planning/DocumentProcessPlanningAdapter.cpp`：将几何快照和加工状态转换为规划值对象，不再读取 `CadDocument`。
+- `src/application/planning/DocumentProcessPlanningAdapter.cpp`：将几何快照和加工状态转换为规划值对象，不再读取 `CadDocument`；重复几何在此按快照标记为 `DuplicateGeometry` 排除项。
+- `src/application/geometry/GeometryDuplicateAnalyzer.cpp`：基于几何快照的重复几何分析，供规划输入使用，不修改 CAD 文档。
 - `src/core/planning/PlanarProcessPlanBuilder.cpp`：构建三轴最近距离加工计划。
 - `src/core/planning/ProcessPlanBuilder.cpp`：保留四轴计划构建的唯一生产入口和阶段编排。
 - `src/core/planning/internal/ProcessPlanBuilder_*.inl`：按内部类型与曲线、截面映射、遍历与区位、区位诊断、闭环遍历、Break 区位段遍历、入口选择与完整性校验拆分四轴规划实现；这些片段仍在同一匿名命名空间和编译单元中执行，不形成并行算法或替代入口。

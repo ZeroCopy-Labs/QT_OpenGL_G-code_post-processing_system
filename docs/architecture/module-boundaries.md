@@ -69,7 +69,11 @@ DocumentProcessPlanningAdapter → ProcessPlanningService → ProcessPlan
 
 `DocumentProcessPlanningAdapter` 与 `ProcessPlanningService` 不再接收 `CadDocument`，也不再从 CAD 图元重新编译几何；四轴拓扑输入由 `GeometrySnapshotTopologyAdapter` 从同一快照转换。快照构建由应用层编排（桌面层 `ensureCurrentGeometrySnapshot()`）在需要规划时按需触发，不建立全局快照管理器。
 
-仍然直接接收 `CadDocument` 的消费者是 `MachineTrajectoryService`、`NcProgramService`、`GGenerator` 与 compatibility 层的旧适配器，它们属于后续轨迹、导出和兼容阶段。
+CAM 排序不修改 CAD：`sortEntitiesWithProcessPlan2D()` / `sortEntitiesWithProcessPlan3D()` 只消费几何快照，重复几何由 `GeometryDuplicateAnalyzer` 识别并在加工计划中按 `ProcessExclusionReason::DuplicateGeometry` 排除，不调用 `CadEditer` 删除图元，也不推进文档内容 revision。CAD 工作区的显式“去重”和导入后自动去重仍是明确的 CAD 清理操作。
+
+`MachineTrajectoryService::buildRotaryTrajectory()` 同样只接收 `GeometrySnapshot`、加工状态和加工计划，不接收 `CadDocument`，也不自行捕获或编译 CAD 几何；轨迹执行继续按图元类型使用轨迹采样策略（从快照条目内的源几何重新采样）。
+
+仍然直接接收 `CadDocument` 的消费者是 `NcProgramService`（三轴 NC 路径与兼容层元数据捕获）、`GGenerator`（文档与配置持有者）与 compatibility 层的旧适配器，它们属于后续导出与兼容阶段。
 
 `ProcessPresentationSnapshot` 仍由桌面层持有并交给 Viewer，`RotaryTubeSectionModel` 仍由桌面层持有，本阶段未迁移。
 

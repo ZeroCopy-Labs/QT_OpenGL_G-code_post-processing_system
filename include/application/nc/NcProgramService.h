@@ -1,5 +1,6 @@
 #pragma once
 
+#include "application/geometry/GeometrySnapshot.h"
 #include "infrastructure/config/MachiningProcessConfig.h"
 #include "application/tasks/TaskContext.h"
 #include "core/machining/TubeSection.h"
@@ -21,8 +22,10 @@ public:
         const OperationContext& context
     ) const;
 
+    // 四轴 NC 程序：几何来自几何快照；CAD 文档只用于兼容层元数据捕获（后续阶段迁移）。
     OperationResult<cadcam::nc::NcProgram> buildRotaryProgram
     (
+        const GeometrySnapshot& snapshot,
         CadDocument& document,
         const cadcam::process::DocumentProcessState& processState,
         const cadcam::planning::ProcessPlan& processPlan,

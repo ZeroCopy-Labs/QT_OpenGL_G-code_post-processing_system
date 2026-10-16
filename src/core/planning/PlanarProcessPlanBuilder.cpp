@@ -383,6 +383,8 @@ namespace cadcam::planning
             else if (!entity.processEnabled) exclusion = ProcessExclusionReason::UserDisabled;
             else if (!processableKind(entity.sourceKind)) exclusion = ProcessExclusionReason::UnsupportedGeometry;
             else if (!validPath(entity.path, policy.numericalEpsilon)) exclusion = ProcessExclusionReason::InvalidPath;
+            // 只有本来可加工的图元才按重复几何排除，保持既有排除优先级。
+            else if (entity.duplicateGeometry) exclusion = ProcessExclusionReason::DuplicateGeometry;
             if (exclusion.has_value())
             {
                 plan.exclusions.push_back({ entity.entityId, *exclusion });

@@ -585,10 +585,22 @@ bool Gcode_postprocessing_system::exportGCode
         return false;
     }
 
+    // 四轴导出使用当前 CAM 任务的几何快照；快照过期时按需重建。
+    if (generationMode == GGenerator::GenerationMode::Mode3D
+        && !ensureCurrentGeometrySnapshot(context))
+    {
+        return false;
+    }
+
     GGenerator generator;
     generator.setDocument(&m_document);
     generator.setProfile(&m_activeProfile);
     generator.setGenerationMode(generationMode);
+    if (generationMode == GGenerator::GenerationMode::Mode3D
+        && m_camJob.hasGeometrySnapshot())
+    {
+        generator.setGeometrySnapshot(&*m_camJob.geometrySnapshot());
+    }
     generator.setProcessState(&m_camJob.processState());
     generator.setProcessPlan
     (

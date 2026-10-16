@@ -21,7 +21,6 @@ namespace
     constexpr double kRotaryPlaneMatchToleranceDegrees = 3.0;
     constexpr double kSurfaceSweepBoundaryTolerance = 1.0e-4;
     constexpr double kSquareTubeSectionToleranceRatio = 0.015;
-    constexpr double kSortDedupCoordinateTolerance = 1.0e-4;
     // The machine starts above the workpiece at this pose; use it to select the
     // left end-cut seam that requires the least initial A-axis rotation.
     const QVector3D kRotaryInitialSortOrigin(0.0f, 0.0f, 500.0f);
@@ -265,12 +264,6 @@ namespace
     {
         std::vector<int> componentIds;
         std::vector<std::vector<QVector3D>> preferredStartPointsByComponent;
-    };
-
-    struct SortableDedupResult
-    {
-        size_t removedCount = 0;
-        QVector<CadItem*> duplicateItems;
     };
 
     struct BoundaryOrderDirectionStats
@@ -2023,144 +2016,23 @@ namespace
         return context;
     }
 
-    QString sortDedupPointToken(const RawPathPoint3D& point)
+
+    // 排序结果提示：重复几何只被加工计划排除，没有被删除。
+    QString duplicateGeometryExclusionMessage(const cadcam::planning::ProcessPlan& plan)
     {
-        const qint64 x = static_cast<qint64>(std::llround(point.x / kSortDedupCoordinateTolerance));
-        const qint64 y = static_cast<qint64>(std::llround(point.y / kSortDedupCoordinateTolerance));
-        const qint64 z = static_cast<qint64>(std::llround(point.z / kSortDedupCoordinateTolerance));
-        return QStringLiteral("%1,%2,%3").arg(x).arg(y).arg(z);
-    }
-
-    QString sortDedupJoinTokens(const std::vector<QString>& tokens, size_t startIndex, bool reverse)
-    {
-        QString key;
-        key.reserve(static_cast<int>(tokens.size() * 24));
-
-        for (size_t offset = 0; offset < tokens.size(); ++offset)
-        {
-            const size_t index = reverse
-                ? (startIndex + tokens.size() - offset) % tokens.size()
-                : (startIndex + offset) % tokens.size();
-
-            if (!key.isEmpty())
+        const int duplicateCount = static_cast<int>(std::count_if
+        (
+            plan.exclusions.begin(), plan.exclusions.end(),
+            [](const cadcam::planning::ProcessExclusion& exclusion)
             {
-                key.append(QLatin1Char(';'));
+                return exclusion.reason
+                    == cadcam::planning::ProcessExclusionReason::DuplicateGeometry;
             }
+        ));
 
-            key.append(tokens[index]);
-        }
-
-        return key;
-    }
-
-    QString sortDedupCanonicalPathKey(CadItem* item)
-    {
-        if (item == nullptr)
-        {
-            return QString();
-        }
-
-        item->rebuildRawPathPoints3D();
-
-        std::vector<QString> tokens;
-        tokens.reserve(item->rawPathPoints3D().size());
-
-        for (const RawPathPoint3D& point : item->rawPathPoints3D())
-        {
-            const QString token = sortDedupPointToken(point);
-
-            if (!tokens.empty() && tokens.back() == token)
-            {
-                continue;
-            }
-
-            tokens.push_back(token);
-        }
-
-        if (tokens.empty())
-        {
-            return QString();
-        }
-
-        bool closed = false;
-
-        if (tokens.size() > 1 && tokens.front() == tokens.back())
-        {
-            tokens.pop_back();
-            closed = true;
-        }
-
-        if (tokens.empty())
-        {
-            return QString();
-        }
-
-        QString bestKey;
-
-        if (closed)
-        {
-            for (size_t index = 0; index < tokens.size(); ++index)
-            {
-                const QString forwardKey = sortDedupJoinTokens(tokens, index, false);
-                const QString reverseKey = sortDedupJoinTokens(tokens, index, true);
-
-                if (bestKey.isEmpty() || forwardKey < bestKey)
-                {
-                    bestKey = forwardKey;
-                }
-
-                if (reverseKey < bestKey)
-                {
-                    bestKey = reverseKey;
-                }
-            }
-        }
-        else
-        {
-            const QString forwardKey = sortDedupJoinTokens(tokens, 0, false);
-            const QString reverseKey = sortDedupJoinTokens(tokens, tokens.size() - 1, true);
-            bestKey = forwardKey < reverseKey ? forwardKey : reverseKey;
-        }
-
-        return QStringLiteral("%1|%2|%3")
-            .arg(static_cast<int>(item->m_type))
-            .arg(static_cast<qulonglong>(item->buildColor().rgba()))
-            .arg(bestKey);
-    }
-
-    SortableDedupResult deduplicateSortableItems(std::vector<CadItem*>& sortableItems)
-    {
-        SortableDedupResult result;
-        std::vector<CadItem*> uniqueItems;
-        std::vector<QString> uniqueKeys;
-        uniqueItems.reserve(sortableItems.size());
-        uniqueKeys.reserve(sortableItems.size());
-
-        for (CadItem* item : sortableItems)
-        {
-            const QString key = sortDedupCanonicalPathKey(item);
-
-            if (key.isEmpty())
-            {
-                uniqueItems.push_back(item);
-                continue;
-            }
-
-            const bool duplicate = std::find(uniqueKeys.begin(), uniqueKeys.end(), key) != uniqueKeys.end();
-
-            if (duplicate)
-            {
-                result.duplicateItems.append(item);
-                ++result.removedCount;
-                continue;
-            }
-
-            uniqueKeys.push_back(key);
-            uniqueItems.push_back(item);
-        }
-
-        sortableItems = std::move(uniqueItems);
-        return result;
+        return duplicateCount > 0
+            ? QStringLiteral("发现 %1 个重复图元，已在本次加工计划中排除。").arg(duplicateCount)
+            : QString();
     }
 
     bool tryFindNearestNextStartPoint3D

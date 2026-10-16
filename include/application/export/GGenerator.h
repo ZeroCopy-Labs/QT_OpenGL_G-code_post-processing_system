@@ -5,6 +5,7 @@
 #include "core/diagnostics/OperationResult.h"
 #include "core/machining/TubeSection.h"
 #include "core/planning/ProcessPlan.h"
+#include "application/geometry/GeometrySnapshot.h"
 #include "application/process/DocumentProcessState.h"
 
 #include <QString>
@@ -36,6 +37,9 @@ public:
     void setRotaryTubeCenter(double centerY, double centerZ, bool valid);
     void setProcessPlan(const cadcam::planning::ProcessPlan* processPlan);
     void setProcessState(const cadcam::process::DocumentProcessState* processState);
+
+    // 几何快照：四轴导出使用它作为几何输入，不再从 CAD 文档重新捕获几何。
+    void setGeometrySnapshot(const GeometrySnapshot* snapshot);
     void setCutSurfaceCorrection(double wallThickness, bool positive, bool negative)
     {
         m_tubeWallThickness = wallThickness;
@@ -73,5 +77,6 @@ private:
     bool m_rotaryTubeCenterValid = false;
     const cadcam::planning::ProcessPlan* m_processPlan = nullptr;
     const cadcam::process::DocumentProcessState* m_processState = nullptr;
+    const GeometrySnapshot* m_geometrySnapshot = nullptr;
     std::optional<cadcam::machining::TubeSectionModel> m_tubeSectionModel;
 };

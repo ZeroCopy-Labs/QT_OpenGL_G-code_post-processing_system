@@ -1,8 +1,8 @@
 #include "application/machine/MachineTrajectoryService.h"
+
+#include "application/geometry/GeometrySnapshot.h"
 #include "core/diagnostics/SummaryLog.h"
 
-#include "cad/document/CadDocument.h"
-#include "application/geometry/DocumentGeometrySnapshotBuilder.h"
 #include "application/geometry/GeometrySamplingPolicy.h"
 #include "core/machine/ProcessUnitExecutionResolver.h"
 #include "core/machine/RotaryTrajectoryBuilder.h"
@@ -234,7 +234,7 @@ namespace
 
 OperationResult<cadcam::machine::MachineTrajectory> MachineTrajectoryService::buildRotaryTrajectory
 (
-    CadDocument& document,
+    const GeometrySnapshot& snapshot,
     const cadcam::process::DocumentProcessState& processState,
     const cadcam::planning::ProcessPlan& plan,
     const std::optional<cadcam::machining::TubeSectionModel>& tubeSection,
@@ -253,21 +253,13 @@ OperationResult<cadcam::machine::MachineTrajectory> MachineTrajectoryService::bu
             taskContext.operationContext));
         return result;
     }
-    DocumentGeometrySnapshotBuilder snapshotBuilder;
-    auto captured = snapshotBuilder.capture(document, taskContext.operationContext);
-    result.mergeDiagnostics(captured);
-    if (!captured.succeeded() || !captured.value.has_value())
-    {
-        result.status = OperationStatus::Failed;
-        return result;
-    }
-    if (captured.value->contentRevision != plan.contentRevision
-        || plan.contentRevision != document.contentRevision()
+    // 几何快照、加工计划和加工状态必须互相对应；不一致时拒绝生成轨迹，不自动重新规划。
+    if (snapshot.contentRevision != plan.contentRevision
         || plan.processStateRevision != processState.revision())
     {
         result.status = OperationStatus::Conflict;
         result.addDiagnostic(serviceDiagnostic(DiagnosticCode::MachineTrajectoryRevisionMismatch,
-            QStringLiteral("加工计划、截面模型或文档版本不一致，四轴导出已拒绝。"),
+            QStringLiteral("几何快照、加工计划或加工状态版本不一致，四轴导出已拒绝。"),
             taskContext.operationContext));
         return result;
     }
@@ -289,7 +281,7 @@ OperationResult<cadcam::machine::MachineTrajectory> MachineTrajectoryService::bu
     for (const auto& assignment : assignments) plannedIds.insert(assignment.entityId);
     std::set<geometry::EntityId> excludedIds;
     for (const auto& exclusion : plan.exclusions) excludedIds.insert(exclusion.entityId);
-    for (const auto& entry : captured.value->entries)
+    for (const auto& entry : snapshot.entries)
     {
         const bool processable = entry.sourceKind != geometry::SourceGeometryKind::Point
             && entry.sourceKind != geometry::SourceGeometryKind::Unknown
@@ -312,8 +304,8 @@ OperationResult<cadcam::machine::MachineTrajectory> MachineTrajectoryService::bu
     input.tubeSection = tubeSection;
 
     std::vector<machine::ProcessUnitExecutionSource> executionSources;
-    executionSources.reserve(captured.value->entries.size());
-    for (const GeometrySourceEntry& entry : captured.value->entries)
+    executionSources.reserve(snapshot.entries.size());
+    for (const GeometrySnapshotEntry& entry : snapshot.entries)
     {
         if (!entry.sourceEntity.has_value()) continue;
         executionSources.push_back

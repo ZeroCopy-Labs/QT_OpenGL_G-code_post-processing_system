@@ -134,11 +134,17 @@ namespace cadcam::planning
                     : entity.sourceKind == geometry::SourceGeometryKind::Point
                         || entity.sourceKind == geometry::SourceGeometryKind::Unknown
                         ? ProcessExclusionReason::UnsupportedGeometry
-                        : ProcessExclusionReason::InvalidPath;
+                        : entity.path.vertices.size() < 2U
+                            ? ProcessExclusionReason::InvalidPath
+                            // 只有本来可加工的图元才按重复几何排除。
+                            : entity.duplicateGeometry
+                                ? ProcessExclusionReason::DuplicateGeometry
+                                : ProcessExclusionReason::InvalidPath;
             const bool excluded = !entity.visible || !entity.processEnabled
                 || entity.sourceKind == geometry::SourceGeometryKind::Point
                 || entity.sourceKind == geometry::SourceGeometryKind::Unknown
-                || entity.path.vertices.size() < 2U;
+                || entity.path.vertices.size() < 2U
+                || entity.duplicateGeometry;
             if (excluded)
             {
                 plan.exclusions.push_back({ entity.entityId, reason });

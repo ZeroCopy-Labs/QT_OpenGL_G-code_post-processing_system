@@ -181,7 +181,7 @@ inline void toolTransferTests()
         processConfig.sameZone = policy.sameZone;
         processConfig.coordinatedTransferEnabled = linked;
         auto trajectory = MachineTrajectoryService().buildRotaryTrajectory
-            (document, state, *plan.value, section, processConfig, {});
+            (*snapshot.value, state, *plan.value, section, processConfig, {});
         if (!trajectory.succeeded())
             for (const auto& diagnostic : trajectory.diagnostics)
                 std::cerr << diagnostic.userMessage.toStdString() << '\n';
@@ -199,7 +199,7 @@ inline void toolTransferTests()
             changed.sameZone.departureRatio = 0.1;
             changed.sameZone.approachRatio = 0.1;
             auto changedTrajectory = MachineTrajectoryService().buildRotaryTrajectory
-                (document, state, *plan.value, section, changed, {});
+                (*snapshot.value, state, *plan.value, section, changed, {});
             check(changedTrajectory.succeeded() && changedTrajectory.value.has_value());
         }
         auto transfer = config;

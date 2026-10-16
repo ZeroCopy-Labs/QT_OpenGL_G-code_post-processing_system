@@ -29,7 +29,16 @@ namespace cadcam::planning
     enum class LongitudinalSweepDirection { PositiveX, NegativeX };
     enum class BoundaryRole { None, Break, Waste };
     enum class ProcessGroupKind { SingleEntity, ConnectedChain, ClosedLoop, BreakBoundary, WasteBoundary };
-    enum class ProcessExclusionReason { Hidden, UserDisabled, WasteRegion, UnsupportedGeometry, InvalidPath };
+    enum class ProcessExclusionReason
+{
+    Hidden,
+    UserDisabled,
+    WasteRegion,
+    UnsupportedGeometry,
+    InvalidPath,
+    // 与同组保留图元完全重复的几何：CAM 规划排除该图元，但不修改 CAD 文档。
+    DuplicateGeometry
+};
     enum class BoundarySide { Left, OnBoundary, Right, Mixed, Indeterminate };
     enum class PlannedTransferMotionKind
     {
@@ -111,6 +120,8 @@ namespace cadcam::planning
         geometry::Path3D path;
         bool visible = true;
         bool processEnabled = true;
+        // 该图元与同组保留图元几何重复：仅排除加工，不删除 CAD 图元。
+        bool duplicateGeometry = false;
         BoundaryRole boundaryRole = BoundaryRole::None;
         int boundaryPairId = -1;
         std::optional<machining::EndCutSide> endCutSide;

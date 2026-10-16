@@ -173,20 +173,7 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan2D
         return false;
     }
 
-    std::vector<CadItem*> dedupCandidates;
-    for (const std::unique_ptr<CadItem>& entity : m_document.m_entities)
-    {
-        if (entity != nullptr && buildProcessVisualInfo(entity.get()).valid)
-            dedupCandidates.push_back(entity.get());
-    }
-    const SortableDedupResult dedupResult = deduplicateSortableItems(dedupCandidates);
-    if (!dedupResult.duplicateItems.isEmpty()
-        && !m_editer.deleteEntities(dedupResult.duplicateItems))
-    {
-        QMessageBox::warning(this, commandTitle, QStringLiteral("重复图元自动去重失败，排序已中止。"));
-        return false;
-    }
-
+    // 排序是纯 CAM 行为：重复几何在规划阶段按快照识别并排除，不修改 CAD 文档。
     cadcam::planning::PlanarProcessPlanningPolicy policy;
     policy.sortIntent = sortIntent;
     policy.allowReverse = true;
@@ -254,9 +241,7 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan2D
         .arg(commandTitle)
         .arg(m_camJob.processPlan()->assignments.size())
         .arg(m_camJob.processPlan()->exclusions.size())
-        .arg(dedupResult.removedCount > 0
-            ? QStringLiteral("已自动删除 %1 个重复图元。").arg(dedupResult.removedCount)
-            : QString());
+        .arg(duplicateGeometryExclusionMessage(*m_camJob.processPlan()));
     ui->openGLWidget->appendCommandMessage(message);
     ui->openGLWidget->refreshCommandPrompt();
     statusBar()->showMessage(message, 5000);
@@ -287,24 +272,7 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan3D
         return false;
     }
 
-    std::vector<CadItem*> dedupCandidates;
-    for (const std::unique_ptr<CadItem>& entity : m_document.m_entities)
-    {
-        if (entity == nullptr) continue;
-        const CadProcessVisualInfo info = buildProcessVisualInfo(entity.get());
-        const auto state = m_camJob.processState().stateOrDefault(entity->m_entityId);
-        const bool isBoundary = state.overrideData.boundaryRole != cadcam::planning::BoundaryRole::None
-            && state.overrideData.boundaryPairId >= 0;
-        if (info.valid || isBoundary) dedupCandidates.push_back(entity.get());
-    }
-    const SortableDedupResult dedupResult = deduplicateSortableItems(dedupCandidates);
-    if (!dedupResult.duplicateItems.isEmpty()
-        && !m_editer.deleteEntities(dedupResult.duplicateItems))
-    {
-        QMessageBox::warning(this, commandTitle, QStringLiteral("重复图元自动去重失败，排序已中止。"));
-        return false;
-    }
-
+    // 排序是纯 CAM 行为：重复几何在规划阶段按快照识别并排除，不修改 CAD 文档。
     cadcam::planning::ProcessPlanningPolicy policy;
     policy.sortIntent = sortIntent;
     policy.orderingStrategy = m_activeProfile.rotaryAxisConfig().lazyRotationProcessing
@@ -420,9 +388,7 @@ bool Gcode_postprocessing_system::sortEntitiesWithProcessPlan3D
         .arg(strategyText)
         .arg(m_camJob.processPlan()->assignments.size())
         .arg(m_camJob.processPlan()->exclusions.size())
-        .arg(dedupResult.removedCount > 0
-            ? QStringLiteral("已自动删除 %1 个重复图元。").arg(dedupResult.removedCount)
-            : QString());
+        .arg(duplicateGeometryExclusionMessage(*m_camJob.processPlan()));
     ui->openGLWidget->appendCommandMessage(message);
     ui->openGLWidget->refreshCommandPrompt();
     statusBar()->showMessage(message, 5000);

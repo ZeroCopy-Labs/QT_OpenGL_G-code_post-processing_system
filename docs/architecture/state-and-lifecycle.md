@@ -29,6 +29,10 @@
 
 几何快照与文档内容 revision 对应：`CamJob::isGeometrySnapshotCurrent(documentContentRevision)` 判断有效性，`CamJob::invalidateGeometrySnapshot()` 在 CAD 变化后使其失效；需要规划时由应用层按需重建，CAD 编辑过程中不重新编译几何。加工状态变化不影响快照有效期。
 
+重复几何的识别结果属于加工计划：`ProcessExclusionReason::DuplicateGeometry` 记录被排除的重复图元，CAD 文档中的图元保持不变，也不进入 CAD 撤销历史。
+
+四轴机床轨迹仍是导出调用中的临时派生值：`MachineTrajectoryService` 只接收几何快照、加工状态和加工计划，要求三者 revision 对应，失败时返回 `Conflict` 而不是自动重新规划。轨迹当前不进入 `CamJob` 长期持有。
+
 加工上下文分为用户业务输入和自动分析状态。
 
 用户业务输入包括：
