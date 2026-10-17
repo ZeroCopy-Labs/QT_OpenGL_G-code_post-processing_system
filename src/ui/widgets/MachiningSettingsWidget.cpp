@@ -1,5 +1,6 @@
 #include "platform/pch.h"
 
+#include "ui/UiStyleSpec.h"
 #include "ui/widgets/MachiningSettingsWidget.h"
 
 #include <QCheckBox>
@@ -198,7 +199,7 @@ private:
 MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     : QWidget(parent)
 {
-    setMinimumWidth(260);
+    setMinimumWidth(uistyle::kDockMinimumWidth - 20);
 
     QVBoxLayout* rootLayout = new QVBoxLayout(this);
     rootLayout->setContentsMargins(0, 0, 0, 0);
@@ -210,8 +211,8 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
 
     QWidget* content = new QWidget(scrollArea);
     QVBoxLayout* contentLayout = new QVBoxLayout(content);
-    contentLayout->setContentsMargins(10, 10, 10, 10);
-    contentLayout->setSpacing(10);
+    contentLayout->setContentsMargins(uistyle::kPanelPadding, uistyle::kPanelPadding, uistyle::kPanelPadding, uistyle::kPanelPadding);
+    contentLayout->setSpacing(uistyle::kGroupSpacing);
 
     QGroupBox* automaticGroup = new QGroupBox(QStringLiteral("自动处理"), content);
     QVBoxLayout* automaticLayout = new QVBoxLayout(automaticGroup);
@@ -243,11 +244,11 @@ MachiningSettingsWidget::MachiningSettingsWidget(QWidget* parent)
     QGroupBox* statusGroup = new QGroupBox(QStringLiteral("方管识别状态"), content);
     QVBoxLayout* statusGroupLayout = new QVBoxLayout(statusGroup);
     statusGroupLayout->setContentsMargins(6, 6, 6, 6);
-    statusGroupLayout->setSpacing(8);
+    statusGroupLayout->setSpacing(uistyle::kGroupSpacing);
 
     QGroupBox* parametersGroup = new QGroupBox(QStringLiteral("截面参数"), statusGroup);
     QVBoxLayout* parametersLayout = new QVBoxLayout(parametersGroup);
-    parametersLayout->setSpacing(6);
+    parametersLayout->setSpacing(uistyle::kGroupSpacing - 2);
     m_sectionDiagram = new TubeSectionDiagramWidget(parametersGroup);
     parametersLayout->addWidget(m_sectionDiagram);
 

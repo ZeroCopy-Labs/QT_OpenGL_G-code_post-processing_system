@@ -2,6 +2,7 @@
 
 #include "ui/widgets/CadToolPanelWidget.h"
 
+#include "ui/UiStyleSpec.h"
 #include "ui/widgets/ToolPanelStyle.h"
 
 #include <QCheckBox>
@@ -27,16 +28,16 @@ namespace
 {
     constexpr int kColorByLayer = 256;
     constexpr int kColorTrueColor = -1;
-    constexpr int kRibbonButtonWidth = 58;
-    constexpr int kRibbonButtonHeight = 40;
-    constexpr int kFooterHeight = 18;
+    constexpr int kRibbonButtonWidth = 66;
+    constexpr int kRibbonButtonHeight = 46;
+    constexpr int kFooterHeight = uistyle::kFooterHeight;
     constexpr int kFooterReserveWidth = 16;
-    constexpr int kDividerHeight = 78;
-    constexpr int kLauncherSize = 12;
-    constexpr int kRibbonIconSize = 16;
-    constexpr int kPopupGridButtonWidth = 72;
-    constexpr int kPopupGridButtonHeight = 54;
-    constexpr int kPopupGridIconSize = 18;
+    constexpr int kDividerHeight = 96;
+    constexpr int kLauncherSize = 14;
+    constexpr int kRibbonIconSize = 18;
+    constexpr int kPopupGridButtonWidth = 82;
+    constexpr int kPopupGridButtonHeight = 62;
+    constexpr int kPopupGridIconSize = 20;
 
     void addColorOption(QComboBox* comboBox, const QString& text, int colorIndex)
     {
@@ -539,7 +540,8 @@ namespace
             button->setDefaultAction(action);
             button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
             button->setIconSize(QSize(kPopupGridIconSize, kPopupGridIconSize));
-            button->setFixedSize(kPopupGridButtonWidth, kPopupGridButtonHeight);
+            button->setMinimumSize(kPopupGridButtonWidth, kPopupGridButtonHeight);
+    button->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
             button->setAutoRaise(false);
             QObject::connect(button, &QToolButton::clicked, menu, &QMenu::close);
 
@@ -783,7 +785,7 @@ void CadToolPanelWidget::buildUi()
     m_importFileButton->setText(QStringLiteral("文件导入"));
     m_importFileButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     m_importFileButton->setProperty("machiningButton", true);
-    m_importFileButton->setMinimumHeight(30);
+    m_importFileButton->setMinimumHeight(uistyle::kButtonHeightCompact);
     m_importFileButton->setMinimumWidth(92);
     QWidget* filePanel = new QWidget(this);
     QGridLayout* fileLayout = new QGridLayout(filePanel);
@@ -797,7 +799,7 @@ void CadToolPanelWidget::buildUi()
     m_deduplicateButton->setText(QStringLiteral("去重"));
     m_deduplicateButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     m_deduplicateButton->setProperty("machiningButton", true);
-    m_deduplicateButton->setMinimumHeight(30);
+    m_deduplicateButton->setMinimumHeight(uistyle::kButtonHeightCompact);
     m_deduplicateButton->setMinimumWidth(92);
     QWidget* geometryPanel = new QWidget(this);
     QGridLayout* geometryLayout = new QGridLayout(geometryPanel);
@@ -980,7 +982,6 @@ QWidget* CadToolPanelWidget::buildPanelFrame(const QString& title, QWidget* cont
     panel->setProperty("ribbonPanel", true);
     panel->setSizePolicy(flexibleWidth ? QSizePolicy::Preferred : QSizePolicy::Fixed, QSizePolicy::Fixed);
     panel->setMinimumHeight(toolpanel::kPanelHeight);
-    panel->setMaximumHeight(toolpanel::kPanelHeight);
 
     QVBoxLayout* layout = new QVBoxLayout(panel);
     layout->setContentsMargins(6, 4, 6, 0);
@@ -988,7 +989,7 @@ QWidget* CadToolPanelWidget::buildPanelFrame(const QString& title, QWidget* cont
     layout->addWidget(contentWidget, 1);
 
     QWidget* footerWidget = new QWidget(panel);
-    footerWidget->setFixedHeight(kFooterHeight);
+    footerWidget->setMinimumHeight(kFooterHeight);
     QHBoxLayout* footerLayout = new QHBoxLayout(footerWidget);
     footerLayout->setContentsMargins(0, 0, 0, 0);
     footerLayout->setSpacing(0);
@@ -1007,7 +1008,8 @@ QWidget* CadToolPanelWidget::buildPanelFrame(const QString& title, QWidget* cont
     launcherButton->setProperty("panelLauncher", true);
     launcherButton->setArrowType(Qt::DownArrow);
     launcherButton->setAutoRaise(true);
-    launcherButton->setFixedSize(kLauncherSize, kLauncherSize);
+    launcherButton->setMinimumSize(kLauncherSize, kLauncherSize);
+    launcherButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     launcherButton->setEnabled(launcherMenu != nullptr);
 
     if (launcherMenu != nullptr)
@@ -1052,7 +1054,7 @@ QWidget* CadToolPanelWidget::buildDivider()
 {
     QFrame* divider = new QFrame();
     divider->setFixedWidth(1);
-    divider->setFixedHeight(kDividerHeight);
+    divider->setMinimumHeight(kDividerHeight);
     divider->setFrameShape(QFrame::NoFrame);
     m_dividers.push_back(divider);
     return divider;
@@ -1065,7 +1067,7 @@ QWidget* CadToolPanelWidget::buildDrawPanel()
     layout->setContentsMargins(1, 4, 1, 2);
     layout->setHorizontalSpacing(3);
     layout->setVerticalSpacing(3);
-    layout->setSizeConstraint(QLayout::SetFixedSize);
+    layout->setSizeConstraint(QLayout::SetMinAndMaxSize);
 
     addDrawButton(panel, QStringLiteral("直线"), DrawType::Line, 0, 0);
     addDrawButton(panel, QStringLiteral("圆"), DrawType::Circle, 0, 1);
@@ -1084,7 +1086,7 @@ QWidget* CadToolPanelWidget::buildModifyPanel()
     layout->setContentsMargins(1, 4, 1, 2);
     layout->setHorizontalSpacing(3);
     layout->setVerticalSpacing(3);
-    layout->setSizeConstraint(QLayout::SetFixedSize);
+    layout->setSizeConstraint(QLayout::SetMinAndMaxSize);
 
     m_moveButton = new QToolButton(panel);
     m_moveButton->setProperty("ribbonButton", true);
@@ -1092,7 +1094,8 @@ QWidget* CadToolPanelWidget::buildModifyPanel()
     m_moveButton->setIcon(buildMoveIcon(m_theme.accentColor));
     m_moveButton->setIconSize(QSize(kRibbonIconSize, kRibbonIconSize));
     m_moveButton->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-    m_moveButton->setFixedSize(56, kRibbonButtonHeight);
+    m_moveButton->setMinimumSize(kRibbonButtonWidth, kRibbonButtonHeight);
+    m_moveButton->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
     m_moveButton->setEnabled(false);
     connect(m_moveButton, &QToolButton::clicked, this, &CadToolPanelWidget::moveRequested);
 
@@ -1102,7 +1105,8 @@ QWidget* CadToolPanelWidget::buildModifyPanel()
     m_deleteButton->setIcon(buildDeleteIcon(m_theme.accentColor));
     m_deleteButton->setIconSize(QSize(kRibbonIconSize, kRibbonIconSize));
     m_deleteButton->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-    m_deleteButton->setFixedSize(56, kRibbonButtonHeight);
+    m_deleteButton->setMinimumSize(kRibbonButtonWidth, kRibbonButtonHeight);
+    m_deleteButton->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
     m_deleteButton->setEnabled(false);
     connect(m_deleteButton, &QToolButton::clicked, this, &CadToolPanelWidget::deleteRequested);
 
@@ -1112,7 +1116,8 @@ QWidget* CadToolPanelWidget::buildModifyPanel()
     m_rotateButton->setIcon(buildRotateIcon(m_theme.accentColor));
     m_rotateButton->setIconSize(QSize(kRibbonIconSize, kRibbonIconSize));
     m_rotateButton->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-    m_rotateButton->setFixedSize(56, kRibbonButtonHeight);
+    m_rotateButton->setMinimumSize(kRibbonButtonWidth, kRibbonButtonHeight);
+    m_rotateButton->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
     m_rotateButton->setEnabled(false);
     connect(m_rotateButton, &QToolButton::clicked, this, &CadToolPanelWidget::rotateRequested);
 
@@ -1122,7 +1127,8 @@ QWidget* CadToolPanelWidget::buildModifyPanel()
     m_copyButton->setIcon(buildCopyIcon(m_theme.accentColor));
     m_copyButton->setIconSize(QSize(kRibbonIconSize, kRibbonIconSize));
     m_copyButton->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-    m_copyButton->setFixedSize(56, kRibbonButtonHeight);
+    m_copyButton->setMinimumSize(kRibbonButtonWidth, kRibbonButtonHeight);
+    m_copyButton->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
     m_copyButton->setEnabled(false);
     connect(m_copyButton, &QToolButton::clicked, this, &CadToolPanelWidget::copyRequested);
 
@@ -1132,7 +1138,8 @@ QWidget* CadToolPanelWidget::buildModifyPanel()
     m_scaleButton->setIcon(buildScaleIcon(m_theme.accentColor));
     m_scaleButton->setIconSize(QSize(kRibbonIconSize, kRibbonIconSize));
     m_scaleButton->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-    m_scaleButton->setFixedSize(56, kRibbonButtonHeight);
+    m_scaleButton->setMinimumSize(kRibbonButtonWidth, kRibbonButtonHeight);
+    m_scaleButton->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
     m_scaleButton->setEnabled(false);
     connect(m_scaleButton, &QToolButton::clicked, this, &CadToolPanelWidget::scaleRequested);
 
@@ -1142,7 +1149,8 @@ QWidget* CadToolPanelWidget::buildModifyPanel()
     m_arrayButton->setIcon(buildArrayIcon(m_theme.accentColor));
     m_arrayButton->setIconSize(QSize(kRibbonIconSize, kRibbonIconSize));
     m_arrayButton->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-    m_arrayButton->setFixedSize(56, kRibbonButtonHeight);
+    m_arrayButton->setMinimumSize(kRibbonButtonWidth, kRibbonButtonHeight);
+    m_arrayButton->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
     m_arrayButton->setEnabled(false);
     connect(m_arrayButton, &QToolButton::clicked, this, &CadToolPanelWidget::arrayRequested);
 
@@ -1165,13 +1173,13 @@ QWidget* CadToolPanelWidget::buildLayerPanel()
 
     m_layerStatusLabel = new QLabel(QStringLiteral("当前默认绘图图层"), panel);
     m_layerStatusLabel->setWordWrap(false);
-    m_layerStatusLabel->setFixedHeight(16);
+    m_layerStatusLabel->setMinimumHeight(uistyle::kStatusRowHeight);
     m_layerStatusLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     layout->addWidget(m_layerStatusLabel);
 
     m_layerComboBox = new QComboBox(panel);
     m_layerComboBox->setEditable(false);
-    m_layerComboBox->setFixedHeight(toolpanel::kComboHeight);
+    m_layerComboBox->setMinimumHeight(toolpanel::kComboHeight);
     layout->addWidget(m_layerComboBox);
     layout->addStretch(1);
 
@@ -1198,7 +1206,7 @@ QWidget* CadToolPanelWidget::buildPropertyPanel()
 
     m_propertyStatusLabel = new QLabel(QStringLiteral("当前默认绘图特性"), panel);
     m_propertyStatusLabel->setWordWrap(false);
-    m_propertyStatusLabel->setFixedHeight(16);
+    m_propertyStatusLabel->setMinimumHeight(uistyle::kStatusRowHeight);
     m_propertyStatusLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     layout->addWidget(m_propertyStatusLabel);
 
@@ -1213,7 +1221,7 @@ QWidget* CadToolPanelWidget::buildPropertyPanel()
 
     m_propertyLayerComboBox = new QComboBox(layerRowWidget);
     m_propertyLayerComboBox->setEditable(false);
-    m_propertyLayerComboBox->setFixedHeight(toolpanel::kComboHeight);
+    m_propertyLayerComboBox->setMinimumHeight(toolpanel::kComboHeight);
     layerRowLayout->addWidget(m_propertyLayerComboBox, 1);
 
     layout->addWidget(layerRowWidget);
@@ -1250,7 +1258,7 @@ QWidget* CadToolPanelWidget::buildPropertyPanel()
     addColorOption(m_colorComboBox, QStringLiteral("灰"), 8);
     addColorOption(m_colorComboBox, QStringLiteral("浅灰"), 9);
     addColorOption(m_colorComboBox, QStringLiteral("真彩色"), kColorTrueColor);
-    m_colorComboBox->setFixedHeight(toolpanel::kComboHeight);
+    m_colorComboBox->setMinimumHeight(toolpanel::kComboHeight);
     colorRowLayout->addWidget(m_colorComboBox, 1);
 
     layout->addWidget(colorRowWidget);
@@ -1290,7 +1298,8 @@ void CadToolPanelWidget::addDrawButton(QWidget* parent, const QString& text, Dra
     button->setText(text);
     button->setIcon(buildRibbonIcon(drawType, m_theme.accentColor));
     button->setIconSize(QSize(kRibbonIconSize, kRibbonIconSize));
-    button->setFixedSize(kRibbonButtonWidth, kRibbonButtonHeight);
+    button->setMinimumSize(kRibbonButtonWidth, kRibbonButtonHeight);
+    button->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
     button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(button, &QToolButton::clicked, this, [this, drawType]() { emit drawRequested(drawType); });

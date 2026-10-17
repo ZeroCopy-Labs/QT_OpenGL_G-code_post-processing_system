@@ -36,3 +36,4 @@
 - [NC 与 G-code](./implementation/nc-and-gcode.md)
 - [CAM 仿真](./implementation/simulation.md)
 - [CAM 数据一致性验证](./implementation/cam-validation.md)
+- [界面体系与交互规范](./implementation/ui-design-system.md)

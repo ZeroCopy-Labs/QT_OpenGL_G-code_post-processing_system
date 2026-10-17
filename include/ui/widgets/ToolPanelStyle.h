@@ -1,6 +1,7 @@
 #pragma once
 
 #include "desktop/AppTheme.h"
+#include "ui/UiStyleSpec.h"
 
 #include <QString>
 
@@ -8,8 +9,9 @@
 // 两个面板分别放在各自工作区的工具栏上，样式必须来自同一处，避免主题漂移。
 namespace toolpanel
 {
-    constexpr int kPanelHeight = 112;
-    constexpr int kComboHeight = 24;
+    // 面板高度与下拉框高度来自统一规范，面板只设最小值，允许随字体缩放增长。
+    constexpr int kPanelHeight = uistyle::kPanelHeight;
+    constexpr int kComboHeight = uistyle::kControlHeight;
 
     QString cssRgb(const QColor& color);
 

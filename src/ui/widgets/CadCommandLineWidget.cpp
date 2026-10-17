@@ -1,12 +1,14 @@
-﻿// 实现 CadCommandLineWidget 模块，对应头文件中声明的主要行为和协作流程。
+// 实现 CadCommandLineWidget 模块，对应头文件中声明的主要行为和协作流程。
 // 命令栏模块，负责命令提示、最新消息和历史记录的界面展示。
 #include "platform/pch.h"
 
+#include "ui/UiStyleSpec.h"
 #include "ui/widgets/CadCommandLineWidget.h"
 
 #include <QApplication>
 #include <QBoxLayout>
 #include <QEvent>
+#include <algorithm>
 #include <QFont>
 #include <QMouseEvent>
 #include <QScrollBar>
@@ -29,8 +31,7 @@ CadCommandLineWidget::CadCommandLineWidget(QWidget* parent)
     m_summaryLabel->setText(QStringLiteral("命令栏就绪"));
     m_summaryLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
-    QFont summaryFont = m_summaryLabel->font();
-    summaryFont.setPointSize(9);
+    QFont summaryFont = uistyle::secondaryFont();
     m_summaryLabel->setFont(summaryFont);
 
     m_promptLabel = new QLabel(this);
@@ -38,8 +39,7 @@ CadCommandLineWidget::CadCommandLineWidget(QWidget* parent)
     m_promptLabel->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
     m_promptLabel->setText(QStringLiteral(" "));
 
-    QFont promptFont = m_promptLabel->font();
-    promptFont.setPointSize(9);
+    QFont promptFont = uistyle::baseFont();
     promptFont.setBold(true);
     m_promptLabel->setFont(promptFont);
 
@@ -49,9 +49,7 @@ CadCommandLineWidget::CadCommandLineWidget(QWidget* parent)
     m_historyEdit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_historyEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
-    QFont historyFont = m_historyEdit->font();
-    historyFont.setPointSize(9);
-    m_historyEdit->setFont(historyFont);
+    m_historyEdit->setFont(uistyle::secondaryFont());
 
     layout->addWidget(m_summaryLabel);
     layout->addWidget(m_promptLabel);
@@ -174,13 +172,14 @@ void CadCommandLineWidget::refreshHistory()
 
 int CadCommandLineWidget::collapsedHeight() const
 {
-    return fontMetrics().height() + 12;
+    // 规范给出起始高度，字体度量变化时仍以实际行高为准。
+    return std::max(uistyle::kCommandLineCollapsedHeight, fontMetrics().height() + 16);
 }
 
 int CadCommandLineWidget::expandedHeight() const
 {
     const int lineHeight = m_historyEdit->fontMetrics().lineSpacing();
-    return lineHeight * 4 + 34;
+    return std::max(uistyle::kCommandLineExpandedHeight, lineHeight * 4 + 46);
 }
 
 void CadCommandLineWidget::setTheme(const AppThemeColors& theme)

@@ -17,6 +17,7 @@
 #include "infrastructure/config/MachiningParameterStore.h"
 #include "infrastructure/config/GProfilePathStore.h"
 #include "core/machine/MachineTrajectory.h"
+#include "ui/UiStyleSpec.h"
 #include "ui/widgets/MachiningSettingsWidget.h"
 
 #include <QActionGroup>
@@ -37,6 +38,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QSettings>
+#include <QShortcut>
 #include <QSignalBlocker>
 #include <QStatusBar>
 #include <QStyleFactory>
@@ -644,8 +646,7 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
     {
         if (m_machiningSettingsDock != nullptr)
         {
-            m_machiningSettingsDock->show();
-            m_machiningSettingsDock->raise();
+            setMachiningSettingsVisible(true, true);
         }
         const QString message =
             QStringLiteral("请在右侧加工设置面板输入 Y 长、Z 宽、圆角半径和截面中心后应用。");
@@ -693,10 +694,11 @@ Gcode_postprocessing_system::Gcode_postprocessing_system(QWidget* parent)
     if (savedWindowState.isEmpty() || !restoreState(savedWindowState))
     {
         addDockWidget(Qt::RightDockWidgetArea, m_machiningSettingsDock);
-        m_machiningSettingsDock->show();
     }
 
-    m_machiningDockVisibleInCamWorkspace = m_machiningSettingsDock->isVisible();
+    // 面板可见性只由用户偏好决定：窗口尚未显示时 isVisible() 恒为 false，
+    // 不能用来判断用户是否关闭了面板。宽度与停靠位置仍由 restoreState() 恢复。
+    m_machiningSettingsDock->setVisible(m_machiningSettingsVisible);
 
     applyDefaultDrawingProperties();
     applyTheme(loadThemeMode());
@@ -1450,14 +1452,11 @@ void Gcode_postprocessing_system::applyThemeColors(const AppThemeColors& theme, 
 
     qApp->setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
     qApp->setPalette(theme.palette);
-    QFont appFont(QStringLiteral("Microsoft YaHei UI"));
-    appFont.setPointSize(9);
-    qApp->setFont(appFont);
+    // 基础字号与控件尺寸来自统一规范 ui/UiStyleSpec.h。
+    qApp->setFont(uistyle::baseFont());
 
-    setStyleSheet
+    const QString themeStyleSheet = QStringLiteral
     (
-        QStringLiteral
-        (
             "QMainWindow, QDialog, QMessageBox { background-color: %1; color: %2; }"
             "QWidget#centralWidget { background-color: %1; }"
             "QMenuBar { background-color: %3; color: %2; border: none; border-bottom: 1px solid %4; padding: 2px 6px; }"
@@ -1496,7 +1495,7 @@ void Gcode_postprocessing_system::applyThemeColors(const AppThemeColors& theme, 
             "QScrollBar::handle:horizontal { background: %4; min-width: 26px; border-radius: 4px; margin: 2px; }"
             "QScrollBar::handle:horizontal:hover { background: %8; }"
             "QScrollBar::add-line, QScrollBar::sub-line { width: 0px; height: 0px; }"
-            "QStatusBar { background-color: %3; color: %2; border-top: 1px solid %4; padding: 1px 6px; }"
+            "QStatusBar { background-color: %3; color: %2; border-top: 1px solid %4; padding: 3px 8px; }"
             "QStatusBar::item { border: none; }"
         )
         .arg(theme.windowBackground.name())
@@ -1507,8 +1506,15 @@ void Gcode_postprocessing_system::applyThemeColors(const AppThemeColors& theme, 
         .arg(theme.surfaceBackground.name())
         .arg(theme.surfaceAltBackground.name())
         .arg(theme.accentColor.name())
-        .arg(theme.accentTextColor.name())
-    );
+        .arg(theme.accentTextColor.name());
+
+    // 主题颜色 + 统一控件高度/禁用态/停靠面板标题，一次设置完成。
+    setStyleSheet(themeStyleSheet + uistyle::metricsStyleSheet(theme));
+
+    if (m_workspaceSwitcher != nullptr)
+    {
+        m_workspaceSwitcher->setTheme(theme);
+    }
 
     if (m_commandLineWidget != nullptr)
     {
@@ -1904,8 +1910,8 @@ void Gcode_postprocessing_system::initializeMachiningSettingsDock()
         | QDockWidget::DockWidgetMovable
         | QDockWidget::DockWidgetFloatable
     );
-    m_machiningSettingsDock->setMinimumWidth(260);
-    m_machiningSettingsDock->resize(310, height());
+    m_machiningSettingsDock->setMinimumWidth(uistyle::kDockMinimumWidth);
+    m_machiningSettingsDock->resize(uistyle::kDockDefaultWidth, height());
 
     m_machiningSettingsWidget = new MachiningSettingsWidget(m_machiningSettingsDock);
     connect(m_machiningSettingsWidget, &MachiningSettingsWidget::cutSurfacePositiveCorrectionChanged,
@@ -1930,7 +1936,18 @@ void Gcode_postprocessing_system::initializeMachiningSettingsDock()
     QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("视图"));
     QAction* settingsAction = m_machiningSettingsDock->toggleViewAction();
     settingsAction->setText(QStringLiteral("加工设置"));
+    settingsAction->setToolTip(QStringLiteral("显示或隐藏右侧加工设置面板（CAM 工作区）"));
     viewMenu->addAction(settingsAction);
+
+    m_machiningSettingsVisible = loadMachiningSettingsVisible();
+    // 用户在 CAM 工作区显式开关面板时记录偏好；CAD 工作区的自动隐藏不记录。
+    connect(settingsAction, &QAction::toggled, this, [this](bool visible)
+    {
+        if (m_workspace != Workspace::Cam) return;
+        if (m_machiningSettingsVisible == visible) return;
+        m_machiningSettingsVisible = visible;
+        saveMachiningSettingsVisible(visible);
+    });
 
     connect(m_machiningSettingsWidget, &MachiningSettingsWidget::autoDeduplicateOnImportChanged, this, [this](bool enabled)
     {
@@ -2449,29 +2466,54 @@ void Gcode_postprocessing_system::initializeCamToolPanel()
 
 void Gcode_postprocessing_system::initializeWorkspaceSwitcher()
 {
-    m_workspaceToolBar = new QToolBar(QStringLiteral("工作区"), this);
-    m_workspaceToolBar->setObjectName(QStringLiteral("workspaceToolBar"));
-    m_workspaceToolBar->setMovable(false);
-    m_workspaceToolBar->setFloatable(false);
+    // 工作区切换位于主视口右侧的固定窄轨道：轨道本身不可移动、不可关闭，
+    // 加工设置面板停靠在轨道的右侧。
+    m_workspaceDock = new QDockWidget(QStringLiteral("工作区"), this);
+    m_workspaceDock->setObjectName(QStringLiteral("workspaceDock"));
+    m_workspaceDock->setAllowedAreas(Qt::RightDockWidgetArea);
+    m_workspaceDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
+    m_workspaceDock->setMinimumWidth(uistyle::kWorkspaceTrackWidth);
+    m_workspaceDock->setMaximumWidth(uistyle::kWorkspaceTrackWidth + 28);
 
-    m_workspaceTabBar = new QTabBar(m_workspaceToolBar);
-    m_workspaceTabBar->setObjectName(QStringLiteral("workspaceTabBar"));
-    m_workspaceTabBar->setDocumentMode(true);
-    m_workspaceTabBar->setDrawBase(false);
-    m_workspaceTabBar->setExpanding(false);
-    m_workspaceTabBar->addTab(QStringLiteral("CAD"));
-    m_workspaceTabBar->addTab(QStringLiteral("CAM"));
-    m_workspaceTabBar->setTabToolTip(0, QStringLiteral("CAD 工作区：几何创建、编辑与整理"));
-    m_workspaceTabBar->setTabToolTip(1, QStringLiteral("CAM 工作区：加工规划、仿真、NC 与后处理"));
-    m_workspaceToolBar->addWidget(m_workspaceTabBar);
-    // 工作区切换固定在最上方一行：面板工具栏（CAD / CAM）位于其下，同屏互斥显示。
-    insertToolBar(ui->mainToolBar, m_workspaceToolBar);
-    insertToolBarBreak(ui->mainToolBar);
+    m_workspaceSwitcher = new WorkspaceSwitcherWidget(m_workspaceDock);
+    m_workspaceDock->setWidget(m_workspaceSwitcher);
+    m_workspaceDock->setTitleBarWidget(new QWidget(m_workspaceDock));
 
-    connect(m_workspaceTabBar, &QTabBar::currentChanged, this, [this](int index)
+    addDockWidget(Qt::RightDockWidgetArea, m_workspaceDock);
+    if (m_machiningSettingsDock != nullptr)
     {
-        setWorkspace(index == 1 ? Workspace::Cam : Workspace::Cad);
+        // 视口 | 工作区轨道 | 加工设置，顺序固定。
+        splitDockWidget(m_workspaceDock, m_machiningSettingsDock, Qt::Horizontal);
+    }
+
+    connect(m_workspaceSwitcher, &WorkspaceSwitcherWidget::workspaceActivated, this,
+        [this](WorkspaceSwitcherWidget::Workspace workspace)
+    {
+        setWorkspace(workspace == WorkspaceSwitcherWidget::Workspace::Cam
+            ? Workspace::Cam : Workspace::Cad);
     });
+    // 滚轮只在切换器范围内生效：不使用全局事件过滤器，视口缩放不受影响。
+    connect(m_workspaceSwitcher, &WorkspaceSwitcherWidget::workspaceStepRequested, this,
+        [this](int delta) { stepWorkspace(delta); });
+
+    QShortcut* nextWorkspace = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Tab")), this);
+    nextWorkspace->setContext(Qt::WindowShortcut);
+    connect(nextWorkspace, &QShortcut::activated, this, [this]() { stepWorkspace(1); });
+
+    QShortcut* previousWorkspace = new QShortcut
+        (QKeySequence(QStringLiteral("Ctrl+Shift+Tab")), this);
+    previousWorkspace->setContext(Qt::WindowShortcut);
+    connect(previousWorkspace, &QShortcut::activated, this, [this]() { stepWorkspace(-1); });
+}
+
+void Gcode_postprocessing_system::stepWorkspace(int delta)
+{
+    if (delta == 0) return;
+
+    constexpr int workspaceCount = 2;
+    const int current = m_workspace == Workspace::Cad ? 0 : 1;
+    const int next = ((current + delta) % workspaceCount + workspaceCount) % workspaceCount;
+    setWorkspace(next == 1 ? Workspace::Cam : Workspace::Cad);
 }
 
 void Gcode_postprocessing_system::setWorkspace(Workspace workspace)
@@ -2485,15 +2527,14 @@ void Gcode_postprocessing_system::applyWorkspaceState()
 {
     const bool cadActive = m_workspace == Workspace::Cad;
 
-    if (m_workspaceTabBar != nullptr)
+    if (m_workspaceSwitcher != nullptr)
     {
-        const int targetIndex = cadActive ? 0 : 1;
-
-        if (m_workspaceTabBar->currentIndex() != targetIndex)
-        {
-            const QSignalBlocker blocker(m_workspaceTabBar);
-            m_workspaceTabBar->setCurrentIndex(targetIndex);
-        }
+        m_workspaceSwitcher->setCurrentWorkspace
+        (
+            cadActive
+                ? WorkspaceSwitcherWidget::Workspace::Cad
+                : WorkspaceSwitcherWidget::Workspace::Cam
+        );
     }
 
     // 工具栏：CAD 工作区显示几何工具面板，CAM 工作区显示加工面板。
@@ -2515,20 +2556,15 @@ void Gcode_postprocessing_system::applyWorkspaceState()
         m_machiningMenu->menuAction()->setVisible(!cadActive);
     }
 
-    // 右侧“加工设置”面板属于 CAM 工作区，记录用户在 CAM 中的显示选择。
+    // 右侧“加工设置”面板属于 CAM 工作区：CAD 工作区隐藏面板但不改变用户偏好，
+    // 返回 CAM 时按偏好恢复，首次启动默认显示。
     if (m_machiningSettingsDock != nullptr)
     {
         // “视图”里的显示开关跟随工作区，避免在 CAD 工作区打开 CAM 面板。
         m_machiningSettingsDock->toggleViewAction()->setVisible(!cadActive);
-
-        if (cadActive)
+        setMachiningSettingsVisible(!cadActive && m_machiningSettingsVisible, false);
+        if (!cadActive)
         {
-            m_machiningDockVisibleInCamWorkspace = m_machiningSettingsDock->isVisible();
-            m_machiningSettingsDock->hide();
-        }
-        else
-        {
-            m_machiningSettingsDock->setVisible(m_machiningDockVisibleInCamWorkspace);
             syncMachiningSettingsState();
         }
     }
@@ -2559,6 +2595,44 @@ void Gcode_postprocessing_system::applyWorkspaceState()
             : QStringLiteral("CAM 工作区：规划 / 仿真 / NC 与后处理。"),
         3000
     );
+}
+
+// 加工设置面板的显示偏好与工作区行为分离：
+// 用户偏好持久化在 ui/cam/machiningSettingsVisible，默认显示。
+bool Gcode_postprocessing_system::loadMachiningSettingsVisible() const
+{
+    QSettings settings = makeAppSettings();
+    return settings.value(QStringLiteral("ui/cam/machiningSettingsVisible"), true).toBool();
+}
+
+void Gcode_postprocessing_system::saveMachiningSettingsVisible(bool visible) const
+{
+    QSettings settings = makeAppSettings();
+    settings.setValue(QStringLiteral("ui/cam/machiningSettingsVisible"), visible);
+}
+
+void Gcode_postprocessing_system::setMachiningSettingsVisible
+(
+    bool visible,
+    bool recordPreference
+)
+{
+    if (m_machiningSettingsDock == nullptr) return;
+
+    if (recordPreference && m_machiningSettingsVisible != visible)
+    {
+        m_machiningSettingsVisible = visible;
+        saveMachiningSettingsVisible(visible);
+    }
+
+    if (m_machiningSettingsDock->isVisible() != visible)
+    {
+        m_machiningSettingsDock->setVisible(visible);
+    }
+    if (visible)
+    {
+        m_machiningSettingsDock->raise();
+    }
 }
 
 // 确保当前 CAM 任务持有与文档 revision 一致的几何快照。

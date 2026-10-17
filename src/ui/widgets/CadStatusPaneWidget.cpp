@@ -2,6 +2,7 @@
 // 状态栏模块，负责显示当前鼠标世界坐标和后续状态位预留区域。
 #include "platform/pch.h"
 
+#include "ui/UiStyleSpec.h"
 #include "ui/widgets/CadStatusPaneWidget.h"
 
 #include <QAction>
@@ -15,7 +16,7 @@ CadStatusPaneWidget::CadStatusPaneWidget(QWidget* parent)
 {
     setObjectName("CadStatusPaneWidget");
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    setFixedHeight(40);
+    setMinimumHeight(uistyle::kStatusPaneHeight);
 
     QHBoxLayout* layout = new QHBoxLayout(this);
     layout->setContentsMargins(8, 4, 8, 4);
@@ -28,15 +29,13 @@ CadStatusPaneWidget::CadStatusPaneWidget(QWidget* parent)
     coordinateLayout->setSpacing(6);
 
     QLabel* coordinateTitleLabel = new QLabel(QStringLiteral("坐标"), coordinateFrame);
-    QFont titleFont = coordinateTitleLabel->font();
-    titleFont.setPointSize(9);
+    QFont titleFont = uistyle::secondaryFont();
     titleFont.setBold(true);
     coordinateTitleLabel->setFont(titleFont);
     coordinateTitleLabel->setProperty("statusTitle", true);
 
     m_coordinateValueLabel = new QLabel(coordinateFrame);
-    QFont valueFont = m_coordinateValueLabel->font();
-    valueFont.setPointSize(9);
+    QFont valueFont = uistyle::baseFont();
     m_coordinateValueLabel->setFont(valueFont);
     m_coordinateValueLabel->setMinimumWidth(238);
     m_coordinateValueLabel->setProperty("statusValue", true);
@@ -76,7 +75,7 @@ CadStatusPaneWidget::CadStatusPaneWidget(QWidget* parent)
     m_snapSettingsButton->setCursor(Qt::PointingHandCursor);
     m_snapSettingsButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     m_snapSettingsButton->setProperty("snapToggle", true);
-    m_snapSettingsButton->setMinimumHeight(28);
+    m_snapSettingsButton->setMinimumHeight(uistyle::kButtonHeightCompact);
 
     m_snapSettingsMenu = new QMenu(m_snapSettingsButton);
     m_snapSettingsMenu->setObjectName("SnapSettingsMenu");
@@ -111,14 +110,14 @@ CadStatusPaneWidget::CadStatusPaneWidget(QWidget* parent)
     m_orthoButton->setCursor(Qt::PointingHandCursor);
     m_orthoButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     m_orthoButton->setProperty("snapToggle", true);
-    m_orthoButton->setMinimumHeight(28);
+    m_orthoButton->setMinimumHeight(uistyle::kButtonHeightCompact);
 
     m_polarButton = new QToolButton(this);
     m_polarButton->setCheckable(true);
     m_polarButton->setCursor(Qt::PointingHandCursor);
     m_polarButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     m_polarButton->setProperty("snapToggle", true);
-    m_polarButton->setMinimumHeight(28);
+    m_polarButton->setMinimumHeight(uistyle::kButtonHeightCompact);
 
     layout->addWidget(coordinateFrame);
     layout->addWidget(entityTypeFrame);

@@ -9,6 +9,7 @@
 #include "ui/widgets/CadStatusPaneWidget.h"
 #include "ui/widgets/CadToolPanelWidget.h"
 #include "ui/widgets/CamToolPanelWidget.h"
+#include "ui/widgets/WorkspaceSwitcherWidget.h"
 #include "application/export/GGenerator.h"
 #include "application/machining/RotaryTubeGeometryAnalyzer.h"
 #include "application/machining/RotaryPathTopology.h"
@@ -39,7 +40,6 @@ class QAction;
 class QDockWidget;
 class QTimer;
 class QMenu;
-class QTabBar;
 class QToolBar;
 class MachiningSettingsWidget;
 enum class CadHelpSection;
@@ -163,7 +163,13 @@ private:
     void initializeCamToolPanel();
     void initializeWorkspaceSwitcher();
     void setWorkspace(Workspace workspace);
+    // 按方向切换工作区：Ctrl+Tab 与切换器滚轮共用。
+    void stepWorkspace(int delta);
     void applyWorkspaceState();
+    // 加工设置面板的显示偏好：与工作区行为分离，独立持久化。
+    bool loadMachiningSettingsVisible() const;
+    void saveMachiningSettingsVisible(bool visible) const;
+    void setMachiningSettingsVisible(bool visible, bool recordPreference);
     void initializeMachiningSettingsDock();
     void syncToolPanelState();
     void syncMachiningSettingsState();
@@ -305,9 +311,10 @@ private:
     CadStatusPaneWidget* m_statusPaneWidget = nullptr;
     CadToolPanelWidget* m_toolPanelWidget = nullptr;
     CamToolPanelWidget* m_camToolPanelWidget = nullptr;
-    QToolBar* m_workspaceToolBar = nullptr;
     QToolBar* m_camToolBar = nullptr;
-    QTabBar* m_workspaceTabBar = nullptr;
+    // 主视口右侧的固定工作区轨道，以及轨道内的 CAD / CAM 切换按钮。
+    QDockWidget* m_workspaceDock = nullptr;
+    WorkspaceSwitcherWidget* m_workspaceSwitcher = nullptr;
     QMenu* m_machiningMenu = nullptr;
     QDockWidget* m_machiningSettingsDock = nullptr;
     MachiningSettingsWidget* m_machiningSettingsWidget = nullptr;
@@ -344,8 +351,9 @@ private:
     Workspace m_workspace = Workspace::Cad;
     // 进入 CAD 工作区时暂停 CAM 显示总开关，返回 CAM 时恢复。
     bool m_camProcessVisualsVisible = true;
-    // 加工设置面板属于 CAM 工作区，记录用户在 CAM 中的显示/隐藏选择。
-    bool m_machiningDockVisibleInCamWorkspace = true;
+    // 加工设置面板的显示偏好（ui/cam/machiningSettingsVisible）：
+    // 由用户在 CAM 工作区的显式操作更新，CAD 工作区的自动隐藏不改变它。
+    bool m_machiningSettingsVisible = true;
     QString m_currentDocumentPath;
     QMap<QString, GProfile> m_loadedProfiles;
     QMap<QString, QString> m_loadedProfileNames;

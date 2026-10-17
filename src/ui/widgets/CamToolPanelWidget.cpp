@@ -2,6 +2,7 @@
 
 #include "ui/widgets/CamToolPanelWidget.h"
 
+#include "ui/UiStyleSpec.h"
 #include "ui/widgets/ToolPanelStyle.h"
 
 #include <algorithm>
@@ -20,8 +21,9 @@
 
 namespace
 {
-    constexpr int kFooterHeight = 18;
-    constexpr int kDividerHeight = 78;
+    constexpr int kFooterHeight = uistyle::kFooterHeight;
+    constexpr int kDividerHeight = 96;
+    constexpr int kRibbonButtonHeight = 46;
 }
 
 CamToolPanelWidget::CamToolPanelWidget(QWidget* parent)
@@ -152,7 +154,7 @@ QWidget* CamToolPanelWidget::buildSimulationControlPanel()
     speedLabel->setProperty("machiningFieldLabel", true);
     m_simulationSpeedComboBox = new QComboBox(panel);
     m_simulationSpeedComboBox->setEditable(false);
-    m_simulationSpeedComboBox->setFixedHeight(toolpanel::kComboHeight);
+    m_simulationSpeedComboBox->setMinimumHeight(toolpanel::kComboHeight);
     m_simulationSpeedComboBox->addItem(QStringLiteral("0.25×"), 0.25);
     m_simulationSpeedComboBox->addItem(QStringLiteral("0.5×"), 0.5);
     m_simulationSpeedComboBox->addItem(QStringLiteral("1×"), 1.0);
@@ -364,22 +366,22 @@ QWidget* CamToolPanelWidget::buildNcPostStage()
     m_profileManagerButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     m_profileManagerButton->setProperty("machiningButton", true);
     m_profileManagerButton->setToolTip(QStringLiteral("管理配置文件与检索路径"));
-    m_profileManagerButton->setFixedHeight(toolpanel::kComboHeight);
-    m_profileManagerButton->setMinimumWidth(76);
+    m_profileManagerButton->setMinimumHeight(toolpanel::kComboHeight);
+    m_profileManagerButton->setMinimumWidth(84);
     m_profileManagerButton->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     m_profileComboBox = new QComboBox(configPanel);
     m_profileComboBox->setEditable(false);
-    m_profileComboBox->setFixedHeight(toolpanel::kComboHeight);
+    m_profileComboBox->setMinimumHeight(toolpanel::kComboHeight);
     m_profileComboBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     configLayout->addWidget(m_profileManagerButton, 0, 0);
     configLayout->addWidget(m_profileComboBox, 0, 1, 1, 2);
 
     QLabel* modeLabel = new QLabel(QStringLiteral("G代码模式"), configPanel);
     modeLabel->setProperty("machiningFieldLabel", true);
-    modeLabel->setMinimumWidth(54);
+    modeLabel->setMinimumWidth(60);
     m_gcodeModeComboBox = new QComboBox(configPanel);
     m_gcodeModeComboBox->setEditable(false);
-    m_gcodeModeComboBox->setFixedHeight(toolpanel::kComboHeight);
+    m_gcodeModeComboBox->setMinimumHeight(toolpanel::kComboHeight);
     m_gcodeModeComboBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_gcodeModeComboBox->addItem(QStringLiteral("自动"), static_cast<int>(GCodeModeSelection::Auto));
     m_gcodeModeComboBox->addItem(QStringLiteral("3轴"), static_cast<int>(GCodeModeSelection::ThreeAxis));
@@ -510,8 +512,8 @@ QToolButton* CamToolPanelWidget::buildMachiningButton(QWidget* parent, const QSt
     button->setText(text);
     button->setToolButtonStyle(Qt::ToolButtonTextOnly);
     button->setProperty("machiningButton", true);
-    button->setMinimumHeight(30);
-    button->setMinimumWidth(92);
+    button->setMinimumHeight(uistyle::kButtonHeightCompact);
+    button->setMinimumWidth(96);
     button->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
     return button;
 }
@@ -522,7 +524,6 @@ QWidget* CamToolPanelWidget::buildPanelFrame(const QString& title, QWidget* cont
     panel->setProperty("ribbonPanel", true);
     panel->setSizePolicy(flexibleWidth ? QSizePolicy::Preferred : QSizePolicy::Fixed, QSizePolicy::Fixed);
     panel->setMinimumHeight(toolpanel::kPanelHeight);
-    panel->setMaximumHeight(toolpanel::kPanelHeight);
 
     QVBoxLayout* layout = new QVBoxLayout(panel);
     layout->setContentsMargins(6, 4, 6, 0);
@@ -530,7 +531,7 @@ QWidget* CamToolPanelWidget::buildPanelFrame(const QString& title, QWidget* cont
     layout->addWidget(contentWidget, 1);
 
     QWidget* footerWidget = new QWidget(panel);
-    footerWidget->setFixedHeight(kFooterHeight);
+    footerWidget->setMinimumHeight(kFooterHeight);
     QHBoxLayout* footerLayout = new QHBoxLayout(footerWidget);
     footerLayout->setContentsMargins(0, 0, 0, 0);
     footerLayout->setSpacing(0);
@@ -551,7 +552,7 @@ QWidget* CamToolPanelWidget::buildPanelFrame(const QString& title, QWidget* cont
 
     if (flexibleWidth)
     {
-        panel->setMinimumWidth(std::max(112, resolvedWidth - 24));
+        panel->setMinimumWidth(std::max(120, resolvedWidth - 24));
         panel->setMaximumWidth(QWIDGETSIZE_MAX);
     }
     else
@@ -567,7 +568,7 @@ QWidget* CamToolPanelWidget::buildDivider()
 {
     QFrame* divider = new QFrame();
     divider->setFixedWidth(1);
-    divider->setFixedHeight(kDividerHeight);
+    divider->setMinimumHeight(kDividerHeight);
     divider->setFrameShape(QFrame::NoFrame);
     m_dividers.push_back(divider);
     return divider;

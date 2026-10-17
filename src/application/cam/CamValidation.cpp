@@ -474,13 +474,18 @@ OperationReport CamValidation::validateMachineTrajectory
 
     const std::map<EntityId, const ProcessAssignment*> assignments = indexAssignments(plan);
     const std::set<int> groupIds = collectGroupIds(plan);
-    std::set<EntityId> visitedEntities;
+    // 计划片段会把同一图元拆成多条执行路径，因此轨迹实体的次数上限由片段数决定。
+    std::map<EntityId, int> allowedOccurrences;
+    for (const cadcam::planning::ProcessPathFragment& fragment : plan.plannedFragments)
+    {
+        ++allowedOccurrences[fragment.entityId];
+    }
+    std::map<EntityId, int> occurrences;
     int lastProcessUnitIndex = -1;
 
     for (const cadcam::machine::EntityTrajectory& entity : trajectory.entities)
     {
         if (entity.entityId == 0U
-            || !visitedEntities.insert(entity.entityId).second
             || assignments.find(entity.entityId) == assignments.end())
         {
             reportConflict
@@ -488,12 +493,28 @@ OperationReport CamValidation::validateMachineTrajectory
                 report,
                 context,
                 QStringLiteral("validate-trajectory-entity"),
-                QStringLiteral("机床轨迹包含计划外的重复或缺失图元，请重新生成轨迹。"),
+                QStringLiteral("机床轨迹包含计划外的图元，请重新生成轨迹。"),
                 DiagnosticCode::MachineTrajectoryEntityMissing,
                 entity.entityId
             );
             return report;
         }
+
+        const int occurrenceLimit = std::max(1, allowedOccurrences[entity.entityId]);
+        if (++occurrences[entity.entityId] > occurrenceLimit)
+        {
+            reportConflict
+            (
+                report,
+                context,
+                QStringLiteral("validate-trajectory-entity-repeat"),
+                QStringLiteral("机床轨迹中同一图元的执行路径数超过计划片段数，请重新生成轨迹。"),
+                DiagnosticCode::MachineTrajectoryEntityMissing,
+                entity.entityId
+            );
+            return report;
+        }
+
 
         const ProcessAssignment* assignment = assignments.at(entity.entityId);
         if (entity.processUnitIndex != assignment->processUnitIndex
@@ -586,15 +607,17 @@ OperationReport CamValidation::validateMachineTrajectory
         }
     }
 
-    if (visitedEntities.empty() && !assignments.empty())
+    for (const auto& entry : assignments)
     {
+        if (occurrences[entry.first] > 0) continue;
         reportConflict
         (
             report,
             context,
             QStringLiteral("validate-trajectory-coverage"),
-            QStringLiteral("机床轨迹没有覆盖任何加工图元，请重新生成轨迹。"),
-            DiagnosticCode::MachineTrajectoryEntityMissing
+            QStringLiteral("机床轨迹没有覆盖计划中的全部加工图元，请重新生成轨迹。"),
+            DiagnosticCode::MachineTrajectoryEntityMissing,
+            entry.first
         );
         return report;
     }
@@ -684,16 +707,31 @@ OperationReport CamValidation::validateNcProgram
     }
 
     const std::map<EntityId, const ProcessAssignment*> assignments = indexAssignments(plan);
-    std::map<EntityId, const cadcam::machine::EntityTrajectory*> trajectoryEntities;
+    // 同一图元可能按计划片段拆成多条轨迹实体，因此按出现顺序保存全部实体。
+    std::map<EntityId, std::vector<const cadcam::machine::EntityTrajectory*>> trajectoryEntities;
     if (trajectory.has_value())
     {
         for (const cadcam::machine::EntityTrajectory& entity : trajectory->entities)
         {
-            trajectoryEntities.emplace(entity.entityId, &entity);
+            trajectoryEntities[entity.entityId].push_back(&entity);
         }
     }
 
-    std::set<EntityId> visitedEntities;
+    // 四轴 NC 的实体块与机床轨迹实体一一对应（片段会拆成多块）；
+    // 三轴 NC 每个图元恰好一个实体块。
+    std::map<EntityId, int> allowedOccurrences;
+    if (trajectory.has_value())
+    {
+        for (const auto& entry : trajectoryEntities)
+        {
+            allowedOccurrences[entry.first] = static_cast<int>(entry.second.size());
+        }
+    }
+    else
+    {
+        for (const auto& entry : assignments) allowedOccurrences[entry.first] = 1;
+    }
+    std::map<EntityId, int> occurrences;
     std::map<int, int> enableCountByUnit;
     std::map<int, int> disableCountByUnit;
 
@@ -701,7 +739,6 @@ OperationReport CamValidation::validateNcProgram
     {
         const EntityId entityId = block.metadata.entityId;
         if (entityId == 0U
-            || !visitedEntities.insert(entityId).second
             || assignments.find(entityId) == assignments.end())
         {
             reportConflict
@@ -709,7 +746,22 @@ OperationReport CamValidation::validateNcProgram
                 report,
                 context,
                 QStringLiteral("validate-nc-entity"),
-                QStringLiteral("NC 程序包含计划外的重复或缺失图元，请重新生成 NC。"),
+                QStringLiteral("NC 程序包含计划外的图元，请重新生成 NC。"),
+                DiagnosticCode::NcProgramEntityMissing,
+                entityId
+            );
+            return report;
+        }
+
+        const int occurrenceIndex = occurrences[entityId]++;
+        if (occurrenceIndex >= std::max(1, allowedOccurrences[entityId]))
+        {
+            reportConflict
+            (
+                report,
+                context,
+                QStringLiteral("validate-nc-entity-repeat"),
+                QStringLiteral("NC 程序中同一图元的实体块数量超过预期，请重新生成 NC。"),
                 DiagnosticCode::NcProgramDuplicateEntity,
                 entityId
             );
@@ -737,10 +789,15 @@ OperationReport CamValidation::validateNcProgram
         // - 四轴来自生成该 NC 的机床轨迹实体。
         if (trajectory.has_value())
         {
+            // 每个实体块对应同一图元的第 occurrenceIndex 条轨迹实体（片段一一对应）。
             const auto trajectoryEntity = trajectoryEntities.find(entityId);
-            if (trajectoryEntity == trajectoryEntities.end()
-                || block.metadata.processOrder != trajectoryEntity->second->processOrder
-                || block.metadata.processGroupId != trajectoryEntity->second->processGroupId)
+            const bool matched = trajectoryEntity != trajectoryEntities.end()
+                && static_cast<std::size_t>(occurrenceIndex) < trajectoryEntity->second.size()
+                && block.metadata.processOrder
+                    == trajectoryEntity->second[static_cast<std::size_t>(occurrenceIndex)]->processOrder
+                && block.metadata.processGroupId
+                    == trajectoryEntity->second[static_cast<std::size_t>(occurrenceIndex)]->processGroupId;
+            if (!matched)
             {
                 reportInvariant
                 (
@@ -785,19 +842,7 @@ OperationReport CamValidation::validateNcProgram
             return report;
         }
 
-        if (trajectory.has_value() && trajectoryEntities.find(entityId) == trajectoryEntities.end())
-        {
-            reportInvariant
-            (
-                report,
-                context,
-                QStringLiteral("validate-nc-trajectory-presence"),
-                QStringLiteral("NC 实体块在机床轨迹中不存在对应图元。"),
-                DiagnosticCode::NcProgramEntityMissing,
-                entityId
-            );
-            return report;
-        }
+
 
         // 切割控制：只允许“首块启用、末块停用”的合法组合。
         const bool enableLegit = block.beforeCutting == cadcam::nc::NcCuttingControl::None
@@ -878,15 +923,17 @@ OperationReport CamValidation::validateNcProgram
         }
     }
 
-    if (visitedEntities.empty() && !assignments.empty())
+    for (const auto& entry : assignments)
     {
+        if (occurrences[entry.first] > 0) continue;
         reportConflict
         (
             report,
             context,
             QStringLiteral("validate-nc-coverage"),
-            QStringLiteral("NC 程序没有覆盖任何加工图元，请重新生成 NC。"),
-            DiagnosticCode::NcProgramEntityMissing
+            QStringLiteral("NC 程序没有覆盖计划中的全部加工图元，请重新生成 NC。"),
+            DiagnosticCode::NcProgramEntityMissing,
+            entry.first
         );
         return report;
     }
